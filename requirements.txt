@@ -1,0 +1,7 @@
+# Основные зависимости проекта lidds_anomaly_lstm
+
+torch>=2.0
+numpy>=1.24
+scikit-learn>=1.3   # classification_report, roc_auc_score (train.py, predict.py)
+psutil>=5.9          # мониторинг RAM (resource_guard.py) — защита от OOM killer
+matplotlib>=3.7      # график метрик по эпохам (visualization.py)

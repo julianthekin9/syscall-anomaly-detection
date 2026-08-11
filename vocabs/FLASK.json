@@ -1,0 +1,39 @@
+{
+  "syscall": {
+    "<PAD>": 0,
+    "<UNK>": 1,
+    "accept4": 2,
+    "clone": 3,
+    "close": 4,
+    "epoll_create1": 5,
+    "epoll_ctl": 6,
+    "epoll_wait": 7,
+    "exit": 8,
+    "futex": 9,
+    "getpid": 10,
+    "getsockname": 11,
+    "gettid": 12,
+    "madvise": 13,
+    "mmap": 14,
+    "munmap": 15,
+    "poll": 16,
+    "recvfrom": 17,
+    "rseq": 18,
+    "rt_sigprocmask": 19,
+    "sendto": 20,
+    "set_robust_list": 21,
+    "shutdown": 22,
+    "write": 23
+  },
+  "process": {
+    "<PAD>": 0,
+    "<UNK>": 1,
+    "python": 2
+  },
+  "direction": {
+    "<PAD>": 0,
+    "<UNK>": 1,
+    "<": 2,
+    ">": 3
+  }
+}
