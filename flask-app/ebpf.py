@@ -30,6 +30,7 @@ import re
 import subprocess
 import sys
 import time
+from bcc import BPF
 
 
 def build_syscall_table() -> dict[int, str]:
@@ -279,76 +280,40 @@ def start_collector(output_path: str, container: str | None, pid: int | None) ->
         collector.close()
         print(f"Остановлено. Всего событий: {collector.event_counter}")
 
-def run() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--container", help="Имя или id Docker-контейнера")
-    parser.add_argument("--pid", type=int, help="PID процесса напрямую (если не через Docker)")
-    parser.add_argument("--output", required=True, help="Путь к файлу лога (.sc)")
-    args = parser.parse_args()
-
-    start_collector(args.output, args.container, args.pid)
-
-
 ##############################################################################################
 
-def collect_flask_dataset():
-
-    CONTAINER = 'flask-app'
-
-    NORMAL_DIR = './normal_logs'
-    ABNORMAL_DIR = './abnormal_logs'
-
-    NORMAL_PREFIX = 'normal'
-    ABNORMAL_PREFIX = 'abnormal'
-
-    FILE_SIZE_LIMIT = 10 * 1024 * 1024  # 10 MB
+type CollectorState = dict[str, Collector | None]
+type SyscallTable = dict[int, str]
 
 
-    def collect_class(normal: bool, files_count: int) -> None:
-
-        if normal:
-            dir = NORMAL_DIR
-            prefix = NORMAL_PREFIX
-        else:
-            dir = ABNORMAL_DIR
-            prefix = ABNORMAL_PREFIX
-
-        os.makedirs(dir, exist_ok=True)
-
-        try:
-            for i in range(files_count):
-                output_file = f"{dir}/{prefix}_{i}.sc"
-                print(f"Пишу лог в {output_file}. Ctrl+C для остановки.")
-
-                collector = Collector(output_file, syscall_table)
-                state["collector"] = collector
-
-                while os.path.getsize(output_file) < FILE_SIZE_LIMIT:
-                    bpf.perf_buffer_poll(timeout=100)
-
-                collector.close()
-                print(f"Готово: {output_file}, событий: {collector.event_counter}")
-        except KeyboardInterrupt:
-            collector = state["collector"]
-            if collector is not None:
-                collector.close()
-            print("Прервано пользователем")
-
-    if os.geteuid() != 0:
-        print("Нужен root (или CAP_SYS_ADMIN) для загрузки eBPF-программы", file=sys.stderr)
-        sys.exit(1)
+def collect_class(dir: str, log_prefix: str, files_count: int, file_size_limit: int, syscall_table: SyscallTable, bpf: BPF, state: CollectorState) -> CollectorState:
+    os.makedirs(dir, exist_ok=True)
 
     try:
-        from bcc import BPF
-    except ImportError:
-        print(
-            "Модуль bcc не найден. Установите:\n"
-            "  sudo apt install bpfcc-tools python3-bpfcc linux-headers-$(uname -r)",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        for i in range(files_count):
+            output_file = f"{dir}/{log_prefix}_{i}.sc"
+            print(f"Пишу лог в {output_file}. Ctrl+C для остановки.")
 
-    pid = resolve_pid(CONTAINER)
+            collector = Collector(output_file, syscall_table)
+
+            state["collector"] = collector
+
+            while os.path.getsize(output_file) < file_size_limit:
+                bpf.perf_buffer_poll(timeout=100)
+
+            collector.close()
+            print(f"Готово: {output_file}, событий: {collector.event_counter}")
+    except KeyboardInterrupt:
+        collector = state["collector"]
+        if collector is not None:
+            collector.close()
+        print("Прервано пользователем")
+        sys.exit(0)
+
+    return state
+
+def init_ebpf(container_name: str) -> tuple[BPF, SyscallTable, CollectorState]:
+    pid = resolve_pid(container_name)
     cgroup_id = get_cgroup_id(pid) if pid is not None else 0
     if pid is not None:
         print(f"Фильтр по PID={pid}, cgroup_id={cgroup_id}")
@@ -361,7 +326,7 @@ def collect_flask_dataset():
     bpf = BPF(text=BPF_PROGRAM)
     bpf["cgroup_filter"][ct.c_int(0)] = ct.c_uint64(cgroup_id)
 
-    state: dict[str, Collector | None] = {"collector": None}
+    state: CollectorState = {"collector": None}
 
     def dispatch(cpu, data, size):
         collector = state["collector"]
@@ -370,8 +335,50 @@ def collect_flask_dataset():
 
     bpf["events"].open_perf_buffer(dispatch)
 
-    collect_class(normal=True, files_count=100)
-    collect_class(normal=False, files_count=100)
+    return bpf, syscall_table, state
+
+
+def collect_single_log(container_name: str, path: str, file_size_limit: int) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    bpf, syscall_table, state = init_ebpf(container_name=container_name)
+
+    collector = Collector(path, syscall_table)
+    state["collector"] = collector
+
+    try:
+        print(f"Пишу лог в {path}. Ctrl+C для остановки.")
+        while os.path.getsize(path) < file_size_limit:
+            bpf.perf_buffer_poll(timeout=100)
+        collector.close()
+        print(f"Готово: {path}, событий: {collector.event_counter}")
+    except KeyboardInterrupt:
+        collector.close()
+        print("Прервано пользователем")
+        sys.exit(0)
+    
+def collect_flask_dataset():
+
+    CONTAINER = 'flask-app'
+
+    NORMAL_DIR = './normal_logs'
+    ABNORMAL_DIR = './abnormal_logs'
+
+    NORMAL_PREFIX = 'normal'
+    ABNORMAL_PREFIX = 'abnormal'
+
+    FILE_SIZE_LIMIT = 10 * 1024 * 1024  # 10 MB
+
+    if os.geteuid() != 0:
+        print("Нужен root (или CAP_SYS_ADMIN) для загрузки eBPF-программы", file=sys.stderr)
+        sys.exit(1)
+
+    bpf, syscall_table, state = init_ebpf(CONTAINER)
+
+    state = collect_class(dir=NORMAL_DIR, log_prefix=NORMAL_PREFIX, files_count=100, file_size_limit=FILE_SIZE_LIMIT, syscall_table=syscall_table, bpf=bpf, state=state)
+    # _ = collect_class(dir=ABNORMAL_DIR, log_prefix=ABNORMAL_PREFIX, files_count=100, file_size_limit=FILE_SIZE_LIMIT, syscall_table=syscall_table, bpf=bpf, state=state)
 
 if __name__ == "__main__":
-    collect_flask_dataset()
+    # collect_flask_dataset()
+
+    collect_single_log(container_name='flask-app', path='./abnormal_logs/new_abnormal.sc', file_size_limit=3 * 1024 * 1024)

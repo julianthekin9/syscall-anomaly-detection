@@ -40,21 +40,6 @@ def health():
     })
 
 
-@app.route("/api/status")
-def status():
-    return jsonify({
-        "service": "shop",
-        "version": "1.0.0",
-        "status": "running"
-    })
-
-
-@app.route("/api/version")
-def version():
-    return jsonify({
-        "version": "1.0.0"
-    })
-
 @app.route("/api/login", methods=["POST"])
 def login():
 
@@ -222,31 +207,58 @@ def create_order():
     })
 
 
-@app.route("/admin")
-def admin():
+
+##################################################################################################
+
+
+
+@app.route("/api/debug/process-info")
+def debug_process_info():
+
+    import ctypes
+
+    libc = ctypes.CDLL(None)
 
     return jsonify({
-        "error": "authentication required"
-    }), 403
+        "success": True,
+        "pid": libc.getpid(),
+        "ppid": libc.getppid(),
+        "uid": libc.getuid(),
+        "euid": libc.geteuid(),
+        "gid": libc.getgid(),
+        "egid": libc.getegid()
+    })
+
+@app.route("/api/debug/network")
+def debug_network():
+    import socket
+
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    try:
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        port = server.getsockname()[1]
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            client.connect(("127.0.0.1", port))
+            connection, _ = server.accept()
+            try:
+                client.send(b"test")
+                connection.recv(4)
+
+            finally:
+                connection.close()
+        finally:
+            client.close()
+
+    finally:
+        server.close()
+
+    return {"status": "ok"}
 
 
-@app.route("/admin/users")
-def admin_users():
-
-    return jsonify({
-        "error": "authentication required"
-    }), 403
-
-
-@app.route("/admin/config")
-def admin_config():
-
-    return jsonify({
-        "error": "authentication required"
-    }), 403
-
-
-@app.route("/api/debug/run", methods=["POST"])
+@app.route("/api/debug/run")
 def debug_run():
 
     data = request.get_json(silent=True) or {}
@@ -298,15 +310,6 @@ def debug_run():
             "error": "command timeout"
         }), 500
 
-
-@app.route("/metrics")
-def metrics():
-
-    return jsonify({
-        "requests": 1000,
-        "errors": 12,
-        "uptime": 12345
-    })
 
 
 if __name__ == "__main__":

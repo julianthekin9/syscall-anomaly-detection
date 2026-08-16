@@ -47,22 +47,42 @@ def command_execution():
         "ls -la",
         "ps",
         "uname",
-        "hostname"
+        "hostname",
+        "mount"
     ]
 
-    for command in commands:
+    command = random.choice(commands)
 
-        request(
-            "POST",
-            "/api/debug/run",
-            json={
-                "command": command
-            }
-        )
+    request(
+        "GET",
+        "/api/debug/run",
+        json={
+            "command": command
+        }
+    )
 
-        time.sleep(
-            random.uniform(0.1, 0.5)
-        )
+    time.sleep(
+        random.uniform(0.1, 0.5)
+    )
+
+def process_info():
+    request(
+        "GET",
+        "/api/debug/process-info"
+    )
+    time.sleep(
+        random.uniform(0.1, 0.5)
+    )
+
+def network():
+    request(
+        "GET",
+        "/api/debug/network"
+    )
+    time.sleep(
+        random.uniform(0.1, 0.5)
+    )
+
 
 def run_abnormal_traffic():
 
@@ -73,7 +93,12 @@ def run_abnormal_traffic():
 
     try:
         while True:
-            command_execution()
+            process_info()
+            network()
+
+            # if random.random() < 0.5:
+            #     if random.random() < 0.5:
+            #         command_execution()
 
     except KeyboardInterrupt:
 
@@ -81,7 +106,6 @@ def run_abnormal_traffic():
             "\nStopping continuous abnormal traffic generation.",
             flush=True
         )
-
 
 if __name__ == "__main__":
     run_abnormal_traffic()
