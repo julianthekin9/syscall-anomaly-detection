@@ -135,7 +135,7 @@ TOP_K = 5  # используется только при SCORE_METHOD="top_k"
 #              "плохих" шагов в окне, чтобы score окна вырос).
 WindowAgg = Literal["quantile", "max"]
 WINDOW_AGG: WindowAgg = "quantile"
-WINDOW_AGG_QUANTILE = 0.7  # используется только если WINDOW_AGG="quantile"
+WINDOW_AGG_QUANTILE = 0.9  # используется только если WINDOW_AGG="quantile"
 
 # Порог калибруется на held-out НОРМАЛЬНОМ val-сплите (ровно для этого он в
 # LID-DS и предусмотрен) — берётся этот перцентиль распределения anomaly
@@ -152,7 +152,7 @@ THRESHOLD_PERCENTILE = 99.0
 # обычные execve/read/write, а появление процесса, которого не было в
 # train, — очень сильный сигнал сам по себе). См. model.SyscallLSTM.
 PROCESS_LOSS_WEIGHT = 1.0    # вес process-головы в train loss: syscall_loss + вес * process_loss
-PROCESS_SCORE_WEIGHT = 1.2   # вес process anomaly score при объединении со syscall score (окно/порог/детекция)
+PROCESS_SCORE_WEIGHT = 1.0   # вес process anomaly score при объединении со syscall score (окно/порог/детекция)
 
 # Если True — порог и diagnostics-метрики (classification_report, ROC-AUC)
 # на test-сплите считаются после КАЖДОЙ эпохи, не только после последней —

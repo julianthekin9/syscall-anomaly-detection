@@ -1,50 +1,29 @@
 #!/usr/bin/env python3
+"""Переиспользуемая eBPF-сессия: BPF грузится в ядро один раз, а конкретный
+Collector (normal / abnormal / любой другой файл) подставляется на лету через
+state["collector"], без повторной загрузки eBPF-программы между фазами.
 
-"""Сборщик системных вызовов контейнера через BCC (eBPF) 
-Требования:
-    sudo apt install bpfcc-tools python3-bpfcc linux-headers-$(uname -r)
-    (root/CAP_SYS_ADMIN обязателен для загрузки eBPF-программы в ядро)
-
-Запуск:
-    # по имени/id контейнера — cgroup определится автоматически через docker inspect
-    sudo python3 lidds_ebpf_collector_2021.py --container my_container --output out.sc
-
-    # либо напрямую по PID (если контейнер не через docker, а просто процесс)
-    sudo python3 lidds_ebpf_collector_2021.py --pid 12345 --output out.sc
-
-    # без фильтра — писать вообще все syscall'ы в системе (для отладки)
-    sudo python3 lidds_ebpf_collector_2021.py --output out.sc
-
-ВАЖНО: этот скрипт пишет только сам .sc-файл трассы. JSON-метаданные записи
-(<имя>.json — exploit/exploit_name/time.exploit[...].absolute и т.д.,
-формат которых разбирает data2021.load_exploit_metadata_2021) этим
-коллектором не генерируются — их нужно создавать отдельно вашим управляющим
-скриптом атаки/сценария (он точно знает, был ли выполнен эксплойт и в какой
-момент абсолютного времени).
+Это рефактор lidds_ebpf_collector_2021.py: вся логика build_syscall_table /
+resolve_pid / get_cgroup_id / BPF_PROGRAM / Event / Collector скопирована без
+изменений (только оттуда убран collect-in-loop код, который тут не нужен).
 """
 
-import argparse
 import ctypes as ct
 import os
 import re
 import subprocess
 import sys
+import threading
 import time
+from contextlib import contextmanager
+
 from bcc import BPF
 
+# --- всё, что не менялось относительно исходного ebpf.py ---
 
 def build_syscall_table() -> dict[int, str]:
-    """Строит таблицу номер->имя для ТЕКУЩЕГО ядра/архитектуры.
-
-    Порядок попыток:
-      1) bcc.syscall.syscall_name — если установлен bcc, это самый надёжный
-         источник (поддерживается проектом BCC, не наша самодеятельность).
-      2) Разбор системного заголовка unistd_64.h — работает без bcc, даёт
-         точную таблицу именно для этой машины.
-      3) Пустая таблица (тогда все syscall'ы будут выводиться как syscall_N).
-    """
     try:
-        from bcc import syscall as bcc_syscall 
+        from bcc import syscall as bcc_syscall
 
         table: dict[int, str] = {}
         for number in range(550):
@@ -73,15 +52,14 @@ def build_syscall_table() -> dict[int, str]:
                     table[number] = name
         if table:
             break
-
     return table
 
 
 def syscall_name(table: dict[int, str], number: int) -> str:
     return table.get(number, f"syscall_{number}")
 
+
 def resolve_pid(container: str | None) -> int | None:
-    """Достаёт PID корневого процесса контейнера через docker inspect."""
     if container is None:
         return None
     try:
@@ -96,30 +74,27 @@ def resolve_pid(container: str | None) -> int | None:
 
 
 def get_cgroup_id(pid: int) -> int:
-    """Numeric cgroup id (cgroup v2) процесса — совпадает с тем, что вернёт
-    bpf_get_current_cgroup_id() в eBPF-программе для процессов этого cgroup'а.
-    """
     with open(f"/proc/{pid}/cgroup", encoding="utf-8") as f:
-        # для cgroup v2 единственная строка вида "0::/path/to/cgroup"
         line = f.readline().strip()
     cgroup_path = line.split(":")[-1]
     full_path = f"/sys/fs/cgroup{cgroup_path}"
     return os.stat(full_path).st_ino
 
+
 BPF_PROGRAM = r"""
 #include <linux/sched.h>
 
 struct event_t {
-    u64 ts_ns;          // время события, наносекунды с момента загрузки BPF-программы (монотонное)
-    u32 pid;             // tgid (то, что обычно называют PID процесса)
-    u32 tid;             // id конкретного потока
+    u64 ts_ns;
+    u32 pid;
+    u32 tid;
     u32 uid;
     u32 cpu;
     char comm[TASK_COMM_LEN];
     s64 syscall_id;
-    u8  direction;       // 0 = enter ('>'), 1 = exit ('<')
-    s64 ret;             // валиден только при direction == 1
-    u64 args[6];          // валидны только при direction == 0
+    u8  direction;
+    s64 ret;
+    u64 args[6];
 };
 
 BPF_PERF_OUTPUT(events);
@@ -128,7 +103,6 @@ BPF_ARRAY(cgroup_filter, u64, 1);
 static inline bool should_trace() {
     u32 key = 0;
     u64 *target = cgroup_filter.lookup(&key);
-    // если фильтр не задан (0) — трассируем вообще всё (режим отладки)
     if (target == 0 || *target == 0) {
         return true;
     }
@@ -146,9 +120,7 @@ static inline void fill_common(struct event_t *event) {
 }
 
 TRACEPOINT_PROBE(raw_syscalls, sys_enter) {
-    if (!should_trace()) {
-        return 0;
-    }
+    if (!should_trace()) { return 0; }
     struct event_t event = {};
     fill_common(&event);
     event.syscall_id = args->id;
@@ -162,9 +134,7 @@ TRACEPOINT_PROBE(raw_syscalls, sys_enter) {
 }
 
 TRACEPOINT_PROBE(raw_syscalls, sys_exit) {
-    if (!should_trace()) {
-        return 0;
-    }
+    if (!should_trace()) { return 0; }
     struct event_t event = {};
     fill_common(&event);
     event.syscall_id = args->id;
@@ -177,15 +147,13 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit) {
 
 
 class Event(ct.Structure):
-    """Должна побайтово совпадать со struct event_t в BPF_PROGRAM выше."""
-
     _fields_ = [
         ("ts_ns", ct.c_uint64),
         ("pid", ct.c_uint32),
         ("tid", ct.c_uint32),
         ("uid", ct.c_uint32),
         ("cpu", ct.c_uint32),
-        ("comm", ct.c_char * 16),  # TASK_COMM_LEN
+        ("comm", ct.c_char * 16),
         ("syscall_id", ct.c_int64),
         ("direction", ct.c_uint8),
         ("ret", ct.c_int64),
@@ -194,26 +162,17 @@ class Event(ct.Structure):
 
 
 class Collector:
-    """Держит состояние сборщика: открытый лог-файл, счётчик событий, таблицу syscall-ов.
-
-    В отличие от 2019-версии, здесь НЕТ порядкового номера события в строке
-    лога (2021-формат его не использует), а timestamp — абсолютный unix ns,
-    а не "HH:MM:SS.ns".
-    """
-
     def __init__(self, output_path: str, syscall_table: dict[int, str]) -> None:
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
         self.log = open(output_path, "a", encoding="utf-8")
         self.syscall_table = syscall_table
         self.event_counter = 0
         self.wall_clock_offset_ns = time.time_ns() - time.clock_gettime_ns(time.CLOCK_MONOTONIC)
 
     def to_absolute_unix_ns(self, ts_ns: int) -> int:
-        """Переводит монотонный ts_ns события в абсолютный unix-timestamp
-        (наносекунды) — та же система координат, что и у time.*.absolute в
-        JSON-метаданных LID-DS 2021 (см. докстринг модуля)."""
         return ts_ns + self.wall_clock_offset_ns
 
-    def handle_event(self, cpu: int, data, size: int) -> None:  # noqa: ARG002 (cpu/size — сигнатура BCC-колбэка)
+    def handle_event(self, cpu: int, data, size: int) -> None:  # noqa: ARG002
         event = ct.cast(data, ct.POINTER(Event)).contents
         self.event_counter += 1
 
@@ -227,7 +186,6 @@ class Collector:
         else:
             params = f"res={event.ret}"
 
-        # формат: TIMESTAMP(ns) USER_ID PROCESS_ID PROCESS_NAME THREAD_ID SYSCALL_NAME DIRECTION [params...]
         line = (
             f"{absolute_ts_ns} {event.uid} {event.pid} "
             f"{process_name} {event.tid} {name} {direction_char} {params}\n"
@@ -239,146 +197,77 @@ class Collector:
         self.log.close()
 
 
-def start_collector(output_path: str, container: str | None, pid: int | None) -> None:
-    if os.geteuid() != 0:
-        print("Нужен root (или CAP_SYS_ADMIN) для загрузки eBPF-программы", file=sys.stderr)
-        sys.exit(1)
+# --- новое: сессия с состоянием, живущая дольше одного файла ---
 
-    try:
-        from bcc import BPF  # импорт здесь, чтобы --help работал и без установленного bcc
-    except ImportError:
-        print(
-            "Модуль bcc не найден. Установите:\n"
-            "  sudo apt install bpfcc-tools python3-bpfcc linux-headers-$(uname -r)",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+class EbpfSession:
+    """Грузит eBPF-программу один раз и держит её всё время жизни объекта.
+    Конкретный Collector подставляется через collect_to() на время одной фазы
+    (normal / abnormal / что угодно), опрос perf buffer крутится в фоновом
+    потоке непрерывно.
+    """
 
-    pid = pid if pid is not None else resolve_pid(container)
-    cgroup_id = get_cgroup_id(pid) if pid is not None else 0
-    if pid is not None:
-        print(f"Фильтр по PID={pid}, cgroup_id={cgroup_id}")
-    else:
-        print("Фильтр не задан — трассируются syscall'ы ВСЕХ процессов в системе")
+    def __init__(self, container: str | None = None, pid: int | None = None) -> None:
+        if os.geteuid() != 0:
+            print("Нужен root (или CAP_SYS_ADMIN) для загрузки eBPF-программы", file=sys.stderr)
+            sys.exit(1)
 
-    syscall_table = build_syscall_table()
-    print(f"Загружена таблица из {len(syscall_table)} syscall-ов")
+        self.pid = pid if pid is not None else resolve_pid(container)
+        self.cgroup_id = get_cgroup_id(self.pid) if self.pid is not None else 0
+        if self.pid is not None:
+            print(f"Фильтр по PID={self.pid}, cgroup_id={self.cgroup_id}")
+        else:
+            print("Фильтр не задан — трассируются syscall'ы ВСЕХ процессов в системе")
 
-    bpf = BPF(text=BPF_PROGRAM)
-    bpf["cgroup_filter"][ct.c_int(0)] = ct.c_uint64(cgroup_id)
+        self.syscall_table = build_syscall_table()
+        print(f"Загружена таблица из {len(self.syscall_table)} syscall-ов")
 
-    collector = Collector(output_path, syscall_table)
-    bpf["events"].open_perf_buffer(collector.handle_event)
+        self.bpf = BPF(text=BPF_PROGRAM)
+        self.bpf["cgroup_filter"][ct.c_int(0)] = ct.c_uint64(self.cgroup_id)
 
-    print(f"Пишу лог (формат LID-DS 2021) в {output_path}. Ctrl+C для остановки.")
-    try:
-        while True:
-            bpf.perf_buffer_poll()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        collector.close()
-        print(f"Остановлено. Всего событий: {collector.event_counter}")
+        self._current_collector: Collector | None = None
+        self._lock = threading.Lock()
+        self._stop_event = threading.Event()
 
-##############################################################################################
+        def dispatch(cpu, data, size):
+            with self._lock:
+                collector = self._current_collector
+            if collector is not None:
+                collector.handle_event(cpu, data, size)
 
-type CollectorState = dict[str, Collector | None]
-type SyscallTable = dict[int, str]
+        self.bpf["events"].open_perf_buffer(dispatch)
 
+        self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
+        self._poll_thread.start()
 
-def collect_class(dir: str, log_prefix: str, files_count: int, file_size_limit: int, syscall_table: SyscallTable, bpf: BPF, state: CollectorState) -> CollectorState:
-    os.makedirs(dir, exist_ok=True)
+    def _poll_loop(self) -> None:
+        while not self._stop_event.is_set():
+            self.bpf.perf_buffer_poll(timeout=100)
 
-    try:
-        for i in range(files_count):
-            output_file = f"{dir}/{log_prefix}_{i}.sc"
-            print(f"Пишу лог в {output_file}. Ctrl+C для остановки.")
-
-            collector = Collector(output_file, syscall_table)
-
-            state["collector"] = collector
-
-            while os.path.getsize(output_file) < file_size_limit:
-                bpf.perf_buffer_poll(timeout=100)
-
+    @contextmanager
+    def collect_to(self, output_path: str):
+        """Все syscall-события текущего cgroup'а на время `with`-блока
+        пишутся в output_path. Один Collector — на один вызов."""
+        collector = Collector(output_path, self.syscall_table)
+        with self._lock:
+            self._current_collector = collector
+        try:
+            print(f"Пишу лог в {output_path}")
+            yield collector
+        finally:
+            with self._lock:
+                self._current_collector = None
             collector.close()
-            print(f"Готово: {output_file}, событий: {collector.event_counter}")
-    except KeyboardInterrupt:
-        collector = state["collector"]
-        if collector is not None:
-            collector.close()
-        print("Прервано пользователем")
-        sys.exit(0)
+            print(f"Готово: {output_path}, событий: {collector.event_counter}")
 
-    return state
+    def refresh_cgroup(self, container: str) -> None:
+        """Перечитать PID/cgroup контейнера — вызывай, если контейнер мог
+        перезапуститься между фазами (иначе фильтр будет указывать на
+        мёртвый cgroup и новые события молча не попадут в лог)."""
+        self.pid = resolve_pid(container)
+        self.cgroup_id = get_cgroup_id(self.pid) if self.pid is not None else 0
+        self.bpf["cgroup_filter"][ct.c_int(0)] = ct.c_uint64(self.cgroup_id)
+        print(f"cgroup обновлён: PID={self.pid}, cgroup_id={self.cgroup_id}")
 
-def init_ebpf(container_name: str) -> tuple[BPF, SyscallTable, CollectorState]:
-    pid = resolve_pid(container_name)
-    cgroup_id = get_cgroup_id(pid) if pid is not None else 0
-    if pid is not None:
-        print(f"Фильтр по PID={pid}, cgroup_id={cgroup_id}")
-    else:
-        print("Фильтр не задан — трассируются syscall'ы ВСЕХ процессов в системе")
-
-    syscall_table = build_syscall_table()
-    print(f"Загружена таблица из {len(syscall_table)} syscall-ов")
-
-    bpf = BPF(text=BPF_PROGRAM)
-    bpf["cgroup_filter"][ct.c_int(0)] = ct.c_uint64(cgroup_id)
-
-    state: CollectorState = {"collector": None}
-
-    def dispatch(cpu, data, size):
-        collector = state["collector"]
-        if collector is not None:
-            collector.handle_event(cpu, data, size)
-
-    bpf["events"].open_perf_buffer(dispatch)
-
-    return bpf, syscall_table, state
-
-
-def collect_single_log(container_name: str, path: str, file_size_limit: int) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-
-    bpf, syscall_table, state = init_ebpf(container_name=container_name)
-
-    collector = Collector(path, syscall_table)
-    state["collector"] = collector
-
-    try:
-        print(f"Пишу лог в {path}. Ctrl+C для остановки.")
-        while os.path.getsize(path) < file_size_limit:
-            bpf.perf_buffer_poll(timeout=100)
-        collector.close()
-        print(f"Готово: {path}, событий: {collector.event_counter}")
-    except KeyboardInterrupt:
-        collector.close()
-        print("Прервано пользователем")
-        sys.exit(0)
-    
-def collect_flask_dataset():
-
-    CONTAINER = 'flask-app'
-
-    NORMAL_DIR = './normal_logs'
-    ABNORMAL_DIR = './abnormal_logs'
-
-    NORMAL_PREFIX = 'normal'
-    ABNORMAL_PREFIX = 'abnormal'
-
-    FILE_SIZE_LIMIT = 10 * 1024 * 1024  # 10 MB
-
-    if os.geteuid() != 0:
-        print("Нужен root (или CAP_SYS_ADMIN) для загрузки eBPF-программы", file=sys.stderr)
-        sys.exit(1)
-
-    bpf, syscall_table, state = init_ebpf(CONTAINER)
-
-    state = collect_class(dir=NORMAL_DIR, log_prefix=NORMAL_PREFIX, files_count=100, file_size_limit=FILE_SIZE_LIMIT, syscall_table=syscall_table, bpf=bpf, state=state)
-    # _ = collect_class(dir=ABNORMAL_DIR, log_prefix=ABNORMAL_PREFIX, files_count=100, file_size_limit=FILE_SIZE_LIMIT, syscall_table=syscall_table, bpf=bpf, state=state)
-
-if __name__ == "__main__":
-    # collect_flask_dataset()
-
-    collect_single_log(container_name='flask-app', path='./abnormal_logs/new_abnormal.sc', file_size_limit=3 * 1024 * 1024)
+    def close(self) -> None:
+        self._stop_event.set()
+        self._poll_thread.join(timeout=2)

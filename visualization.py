@@ -1,18 +1,18 @@
-"""Построение графика метрик train/val по эпохам (loss + macro-precision,
-отдельно syscall и process). Вызывается из train.py в конце обучения
-каждого сервиса — см. train.plot_training_curves нет, функция здесь:
+"""Побудова графіка метрик train/val по епохах (loss + macro-precision,
+окремо syscall і process). Викликається з train.py наприкінці навчання
+кожного сервісу — див. train.plot_training_curves, функція тут:
 visualization.plot_training_curves(service_name, history).
 
-history — словарь списков одинаковой длины (по одному элементу на каждую
-"метрическую" эпоху, см. config.METRICS_EVAL_EVERY_N_EPOCHS):
+history — словник списків однакової довжини (по одному елементу на кожну
+"метричну" епоху, див. config.METRICS_EVAL_EVERY_N_EPOCHS):
     "epoch": [1, 3, 5, ...]
     "train_loss_syscall": [...], "val_loss_syscall": [...]
     "train_precision_syscall": [...], "val_precision_syscall": [...]
-    "train_loss_process": [...], "val_loss_process": [...]              (опционально)
-    "train_precision_process": [...], "val_precision_process": [...]    (опционально)
+    "train_loss_process": [...], "val_loss_process": [...]              (необов'язково)
+    "train_precision_process": [...], "val_precision_process": [...]    (необов'язково)
 
-matplotlib используется с backend'ом Agg (без дисплея) — обучение обычно
-идёт на сервере без GUI.
+matplotlib використовується з backend'ом Agg (без дисплея) — навчання
+зазвичай виконується на сервері без GUI.
 """
 
 import os
@@ -26,14 +26,14 @@ import config
 
 
 def plot_training_curves(service_name: str, history: dict[str, list[float]]) -> str | None:
-    """Сохраняет PNG с графиками loss/precision по эпохам в
-    config.PLOTS_DIR/<service_name>_epochs.png. Возвращает путь к файлу,
-    либо None, если history пуста (метрики ни разу не считались — например
-    если config.METRICS_EVAL_EVERY_N_EPOCHS больше числа эпох и последняя
-    эпоха почему-то не попала в замер)."""
+    """Зберігає PNG з графіками loss/precision по епохах у
+    config.PLOTS_DIR/<service_name>_epochs.png. Повертає шлях до файлу
+    або None, якщо history порожня (метрики жодного разу не обчислювалися — наприклад,
+    якщо config.METRICS_EVAL_EVERY_N_EPOCHS більший за кількість епох і остання
+    епоха з якоїсь причини не потрапила до вимірювання)."""
     epochs = history.get("epoch", [])
     if not epochs:
-        print(f"[{service_name}] history пуста — график не строю")
+        print(f"[{service_name}] history порожня — графік не будую")
         return None
 
     has_process = "train_loss_process" in history and "val_loss_process" in history
@@ -45,7 +45,7 @@ def plot_training_curves(service_name: str, history: dict[str, list[float]]) -> 
         ax.plot(epochs, history[train_key], marker="o", label="train")
         ax.plot(epochs, history[val_key], marker="o", label="val")
         ax.set_title(title)
-        ax.set_xlabel("эпоха")
+        ax.set_xlabel("епоха")
         if ylim01:
             ax.set_ylim(0, 1.02)
         ax.grid(alpha=0.3)
@@ -58,7 +58,7 @@ def plot_training_curves(service_name: str, history: dict[str, list[float]]) -> 
         _plot(axes[0][1], "train_loss_process", "val_loss_process", "Loss (process)")
         _plot(axes[1][1], "train_precision_process", "val_precision_process", "Macro precision (process)", ylim01=True)
 
-    fig.suptitle(f"{service_name}: метрики по эпохам")
+    fig.suptitle(f"{service_name}: метрики по епохах")
     fig.tight_layout()
 
     os.makedirs(config.PLOTS_DIR, exist_ok=True)
