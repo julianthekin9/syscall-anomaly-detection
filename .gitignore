@@ -1,0 +1,4 @@
+.venv/
+*.sc
+*.pt
+__pycache__/
