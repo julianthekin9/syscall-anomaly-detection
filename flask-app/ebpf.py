@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""Переиспользуемая eBPF-сессия: BPF грузится в ядро один раз, а конкретный
-Collector (normal / abnormal / любой другой файл) подставляется на лету через
-state["collector"], без повторной загрузки eBPF-программы между фазами.
-
-Это рефактор lidds_ebpf_collector_2021.py: вся логика build_syscall_table /
-resolve_pid / get_cgroup_id / BPF_PROGRAM / Event / Collector скопирована без
-изменений (только оттуда убран collect-in-loop код, который тут не нужен).
-"""
-
 import ctypes as ct
 import os
 import re
@@ -18,8 +9,6 @@ import time
 from contextlib import contextmanager
 
 from bcc import BPF
-
-# --- всё, что не менялось относительно исходного ebpf.py ---
 
 def build_syscall_table() -> dict[int, str]:
     try:
@@ -86,10 +75,6 @@ BPF_PROGRAM = r"""
 
 struct event_t {
     u64 ts_ns;
-    u32 pid;
-    u32 tid;
-    u32 uid;
-    u32 cpu;
     char comm[TASK_COMM_LEN];
     s64 syscall_id;
     u8  direction;
@@ -111,11 +96,6 @@ static inline bool should_trace() {
 
 static inline void fill_common(struct event_t *event) {
     event->ts_ns = bpf_ktime_get_ns();
-    u64 pid_tgid = bpf_get_current_pid_tgid();
-    event->tid = pid_tgid & 0xFFFFFFFF;
-    event->pid = pid_tgid >> 32;
-    event->uid = bpf_get_current_uid_gid() & 0xFFFFFFFF;
-    event->cpu = bpf_get_smp_processor_id();
     bpf_get_current_comm(&event->comm, sizeof(event->comm));
 }
 
@@ -149,10 +129,6 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit) {
 class Event(ct.Structure):
     _fields_ = [
         ("ts_ns", ct.c_uint64),
-        ("pid", ct.c_uint32),
-        ("tid", ct.c_uint32),
-        ("uid", ct.c_uint32),
-        ("cpu", ct.c_uint32),
         ("comm", ct.c_char * 16),
         ("syscall_id", ct.c_int64),
         ("direction", ct.c_uint8),
@@ -187,8 +163,7 @@ class Collector:
             params = f"res={event.ret}"
 
         line = (
-            f"{absolute_ts_ns} {event.uid} {event.pid} "
-            f"{process_name} {event.tid} {name} {direction_char} {params}\n"
+            f"{absolute_ts_ns} {process_name} {name} {direction_char} {params}\n"
         )
         self.log.write(line)
 
@@ -197,14 +172,7 @@ class Collector:
         self.log.close()
 
 
-# --- новое: сессия с состоянием, живущая дольше одного файла ---
-
 class EbpfSession:
-    """Грузит eBPF-программу один раз и держит её всё время жизни объекта.
-    Конкретный Collector подставляется через collect_to() на время одной фазы
-    (normal / abnormal / что угодно), опрос perf buffer крутится в фоновом
-    потоке непрерывно.
-    """
 
     def __init__(self, container: str | None = None, pid: int | None = None) -> None:
         if os.geteuid() != 0:
@@ -260,9 +228,6 @@ class EbpfSession:
             print(f"Готово: {output_path}, событий: {collector.event_counter}")
 
     def refresh_cgroup(self, container: str) -> None:
-        """Перечитать PID/cgroup контейнера — вызывай, если контейнер мог
-        перезапуститься между фазами (иначе фильтр будет указывать на
-        мёртвый cgroup и новые события молча не попадут в лог)."""
         self.pid = resolve_pid(container)
         self.cgroup_id = get_cgroup_id(self.pid) if self.pid is not None else 0
         self.bpf["cgroup_filter"][ct.c_int(0)] = ct.c_uint64(self.cgroup_id)

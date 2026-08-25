@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 import config
 from data import build_test_sequences, encode_recording, make_sequences, read_recording
 from dataset import EvalSequenceDataset, SequenceDataset
-from model import SyscallLSTM, combine_step_scores, compute_step_scores_components, aggregate_window_scores
+from model import SyscallLSTM, aggregate_window_scores, compute_step_scores
 from train import quick_test_evaluation
 
 
@@ -29,19 +29,12 @@ def load_model(service_name: str, device: torch.device) -> tuple[SyscallLSTM, di
         raise FileNotFoundError(f"Не найден чекпоинт {path} — сначала обучите модель: python train.py --service {service_name}")
 
     checkpoint = torch.load(path, map_location=device)
-    # Архитектура (embed_dim'ы, hidden_dim, num_layers, dropout,
-    # use_arg_count_feature) восстанавливается из САМОГО чекпоинта, а не из
-    # текущего config.py — иначе при рассинхроне конфига и чекпоинта
-    # load_state_dict упадёт с ошибкой размерности.
     model = SyscallLSTM.from_checkpoint(checkpoint, device)
     model.eval()
     return model, checkpoint
 
 
 def score_log_file(model: SyscallLSTM, checkpoint: dict, log_path: str, device: torch.device) -> list[float]:
-    """Кодирует новый .sc-файл окнами БЕЗ перекрытия (step=seq_len — каждое
-    событие лога учитывается ровно в одном окне) и возвращает anomaly score
-    на каждое окно."""
     vocabs = checkpoint["vocabs"]
     seq_len = checkpoint["seq_len"]
 
@@ -60,16 +53,12 @@ def score_log_file(model: SyscallLSTM, checkpoint: dict, log_path: str, device: 
     with torch.no_grad():
         for x, y_batch in loader:
             x, y_batch = x.to(device), y_batch.to(device)
-            logits_syscall, logits_process = model(x)
-            s_syscall, s_process = compute_step_scores_components(
-                logits_syscall, logits_process, y_batch, method=checkpoint["score_method"], top_k=checkpoint["top_k"]
-            )
-            combined = combine_step_scores(s_syscall, s_process, process_weight=checkpoint.get("process_score_weight", 1.0))
+            logits_syscall = model(x)
+            step_scores = compute_step_scores(logits_syscall, y_batch)
             window_scores = aggregate_window_scores(
-                combined,
-                # .get(...) — для чекпоинтов, обученных до появления настройки WINDOW_AGG
-                window_agg=checkpoint.get("window_agg", "max"),
-                window_agg_quantile=checkpoint.get("window_agg_quantile", 0.9),
+                step_scores,
+                window_agg=checkpoint["window_agg"],
+                window_agg_quantile=checkpoint["window_agg_quantile"],
             )
             scores.extend(window_scores.cpu().tolist())
     return scores

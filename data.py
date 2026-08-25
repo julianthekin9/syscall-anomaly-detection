@@ -1,15 +1,3 @@
-"""Парсинг LID-DS 2021 (.sc), построение словарей и авторегрессионных
-последовательностей (next-syscall + next-process prediction) для train/
-val/test сплитов.
-
-Разметка test-сплита — ЦЕЛОЙ ЗАПИСЬЮ, без JSON и без построчного сравнения
-timestamp'ов: test-сплит ожидается в виде двух подпапок,
-config.TEST_NORMAL_SUBDIR (целиком нормальные записи) и
-config.TEST_ABNORMAL_SUBDIR (целиком атакующие записи) — все окна из файлов
-в normal/ размечаются как норма, все окна из файлов в abnormal/ — как атака.
-Как и для train/val, JSON-метаданные вообще не читаются.
-"""
-
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,7 +19,6 @@ _SPLIT_SUBDIR = {
     "val": config.VAL_SUBDIR,
     "test": config.TEST_SUBDIR,
 }
-
 
 @dataclass
 class ParsedLine:
@@ -85,28 +72,14 @@ def read_recording(path: str) -> list[ParsedLine]:
 
 
 def _root_is_single_service() -> bool:
-    """True, если LID_DS_ROOT указывает ПРЯМО на папку одного сценария
-    (training/validation/test лежат прямо внутри LID_DS_ROOT), а не на
-    корень с несколькими подпапками-сценариями. Типичная ситуация, когда
-    скачан только один CVE-сценарий, а не весь корпус LID-DS."""
-    root = Path(config.LID_DS_ROOT)
+    root = Path(config.DATASET_ROOT)
     return (root / config.TRAIN_SUBDIR).is_dir() and (root / config.TEST_SUBDIR).is_dir()
 
 
 def list_services() -> list[str]:
-    """Список сервисов (папок сценариев) под LID_DS_ROOT.
-
-    Поддерживает две структуры датасета:
-    - LID_DS_ROOT/<сценарий>/<training|validation|test>/...  (несколько
-      сценариев под одним корнем — обычный случай для полного корпуса LID-DS)
-    - LID_DS_ROOT/<training|validation|test>/...  (LID_DS_ROOT указывает
-      прямо на папку ОДНОГО сценария — типично, если скачан один CVE)
-    Определяется автоматически по наличию TRAIN_SUBDIR/TEST_SUBDIR прямо
-    внутри LID_DS_ROOT — переносить файлы на диске не нужно.
-    """
-    root = Path(config.LID_DS_ROOT)
+    root = Path(config.DATASET_ROOT)
     if not root.exists():
-        raise FileNotFoundError(f"Не найдена LID_DS_ROOT={root} — проверьте config.LID_DS_ROOT.")
+        raise FileNotFoundError(f"Не найдена DATASET_ROOT={root} — проверьте config.DATASET_ROOT.")
 
     if _root_is_single_service():
         names = [root.name]
@@ -119,37 +92,26 @@ def list_services() -> list[str]:
 
 
 def _split_dir(service_name: str, split: Split) -> Path:
-    root = Path(config.LID_DS_ROOT)
+    root = Path(config.DATASET_ROOT)
     if _root_is_single_service() and service_name == root.name:
         return root / _SPLIT_SUBDIR[split]
     return root / service_name / _SPLIT_SUBDIR[split]
 
 
 def recording_files(service_name: str, split: Split) -> list[Path]:
-    """Список .sc-файлов конкретного сплита конкретного сервиса.
-    Для split="test" ищет ПРЯМО внутри test-папки — если у вас test уже
-    разложен на normal/abnormal (см. test_recording_files), этот метод не
-    различает их и просто найдёт все .sc рекурсивно; для diagnostics-оценки
-    используйте test_recording_files, а не эту функцию."""
     split_dir = _split_dir(service_name, split)
     if not split_dir.exists():
         raise FileNotFoundError(
             f"Не найдена папка сплита {split_dir} — проверьте config.{split.upper()}_SUBDIR "
             f"на соответствие реальной структуре датасета (ожидается либо "
-            f"LID_DS_ROOT/<сценарий>/<{split}-подпапка>, либо, если LID_DS_ROOT "
-            f"уже указывает на папку одного сценария, LID_DS_ROOT/<{split}-подпапка>)."
+            f"DATASET_ROOT/<сценарий>/<{split}-подпапка>, либо, если DATASET_ROOT "
+            f"уже указывает на папку одного сценария, DATASET_ROOT/<{split}-подпапка>)."
         )
     return sorted(split_dir.rglob(f"*{config.RECORDING_EXTENSION}"))
 
 
 def test_recording_files(service_name: str) -> tuple[list[Path], list[Path]]:
-    """.sc-файлы test-сплита, разделённые на нормальные и атакующие ЦЕЛЫМИ
-    ЗАПИСЯМИ (по тому, в какой подпапке лежат) — без JSON, без построчной
-    разметки по timestamp'у. Ожидаемая структура:
-        <test-сплит>/<config.TEST_NORMAL_SUBDIR>/*.sc   — целиком нормальные записи
-        <test-сплит>/<config.TEST_ABNORMAL_SUBDIR>/*.sc — целиком атакующие записи
-    Возвращает (normal_files, abnormal_files).
-    """
+
     test_dir = _split_dir(service_name, "test")
     normal_dir = test_dir / config.TEST_NORMAL_SUBDIR
     abnormal_dir = test_dir / config.TEST_ABNORMAL_SUBDIR
@@ -189,10 +151,6 @@ _SEQ_DTYPE = np.int16  # см. _check_vocab_fits_dtype ниже — почему
 
 
 def _check_vocab_fits_dtype(vocabs: dict[str, dict[str, int]]) -> None:
-    """X/y хранятся как int16 (см. _SEQ_DTYPE) ради компактности в памяти —
-    словари syscall/process/direction в LID-DS обычно ~10-100 значений, но
-    если вдруг словарь окажется больше 32767 (маловероятно, но лучше упасть
-    явно, чем тихо получить переполнение int16 и порченные индексы)."""
     limit = np.iinfo(_SEQ_DTYPE).max
     too_big = {name: len(v) for name, v in vocabs.items() if len(v) > limit}
     if too_big:
@@ -203,17 +161,7 @@ def _check_vocab_fits_dtype(vocabs: dict[str, dict[str, int]]) -> None:
 
 
 def build_vocab(service_name: str, use_cache: bool = True) -> dict[str, dict[str, int]]:
-    """Строит словари syscall/process/direction ТОЛЬКО по train-сплиту (чисто
-    нормальное поведение). Syscall'ы, впервые появляющиеся во время атаки в
-    test-сплите, будут кодироваться как UNK — это осознанно: незнакомый
-    syscall сам по себе является сильным сигналом аномалии.
 
-    Если use_cache=True (по умолчанию) и на диске уже есть закэшированный
-    словарь (config.VOCAB_DIR/<сервис>.json) — читает его, не перечитывая
-    весь train-сплит заново. Кэш ничего не знает о том, менялись ли данные
-    или логика парсинга с прошлого запуска — при необходимости сносите файл
-    вручную или ставьте config.FORCE_REBUILD_VOCAB=True на один прогон.
-    """
     if use_cache:
         cached = load_vocab(service_name)
         if cached is not None:
@@ -256,11 +204,6 @@ def num_features() -> int:
 
 
 def encode_recording(vocabs: dict[str, dict[str, int]], lines: list[ParsedLine]) -> np.ndarray:
-    """Кодирует все строки записи в ОДИН numpy-массив [len(lines), num_features]
-    (int16) вместо списка списков Python int'ов — на порядок компактнее в
-    памяти (int16-ячейка в numpy-массиве занимает 2 байта; Python int-объект
-    в списке — от ~28 байт плюс накладные расходы самого списка), что на
-    больших .sc-записях напрямую снижает риск OOM."""
     arr = np.empty((len(lines), num_features()), dtype=_SEQ_DTYPE)
     for i, line in enumerate(lines):
         arr[i, :] = encode_line(vocabs, line)
@@ -268,28 +211,6 @@ def encode_recording(vocabs: dict[str, dict[str, int]], lines: list[ParsedLine])
 
 
 def make_sequences(rows: np.ndarray, seq_len: int, step: int) -> tuple[np.ndarray, np.ndarray]:
-    """Режет закодированный numpy-массив rows [n, num_features] на
-    last-token-prediction окна.
-
-    X: [n_windows, seq_len, num_features] int16 — вход, все признаки
-    y: [n_windows, seq_len, 2] int16 — ДВА таргета на каждый шаг:
-       y[..., 0] = id syscall'а на следующем шаге (rows[:, 0])
-       y[..., 1] = id process'а на следующем шаге (rows[:, 1])
-       (см. model.SyscallLSTM — модель предсказывает оба: помимо
-       "неожиданный syscall" это ловит и "неожиданный процесс", что важно
-       для атак, не создающих аномальной последовательности syscall'ов, но
-       порождающих аномальный процесс — например web-shell/RCE).
-
-    Возвращает пустые массивы (0 окон), если rows короче seq_len+1.
-
-    ПРИМЕЧАНИЕ про память: при SEQ_STEP < SEQ_LEN окна перекрываются, то
-    есть каждый syscall физически копируется в память несколько раз (это
-    нужно для аугментации train-данных) — это не баг, но именно поэтому
-    здесь используются компактные int16, а не списки Python-объектов или
-    int32/int64, и почему уменьшение перекрытия (увеличение SEQ_STEP) —
-    рабочий способ снизить пиковое потребление памяти, если она всё равно
-    кончается.
-    """
     n_feat = rows.shape[1] if rows.ndim == 2 else num_features()
     n = len(rows)
     needed = seq_len + 1
@@ -315,12 +236,7 @@ def make_sequences(rows: np.ndarray, seq_len: int, step: int) -> tuple[np.ndarra
 def build_normal_sequences(
     service_name: str, vocabs: dict[str, dict[str, int]], split: Split, seq_len: int, step: int
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Последовательности из чисто нормального сплита (train или val) — без
-    разметки атак, т.к. по определению датасета там атак нет.
 
-    Собирает numpy-массив по каждой записи отдельно и склеивает их в конце
-    ОДНИМ np.concatenate — вместо построчного extend() в Python-список, что
-    и обеспечивает основную экономию памяти (см. make_sequences)."""
     X_parts: list[np.ndarray] = []
     y_parts: list[np.ndarray] = []
     for i, rec_path in enumerate(recording_files(service_name, split)):
@@ -348,19 +264,7 @@ def build_normal_sequences(
 def build_test_sequences(
     service_name: str, vocabs: dict[str, dict[str, int]], seq_len: int, step: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Последовательности из test-сплита (normal/ + abnormal/ подпапки) +
-    метка окна для diagnostics-оценки в predict.py.
-
-    Разметка — ЦЕЛОЙ ЗАПИСЬЮ: ВСЕ окна из файлов в config.TEST_ABNORMAL_SUBDIR
-    размечаются как атака (window_is_attack=True), ВСЕ окна из файлов в
-    config.TEST_NORMAL_SUBDIR — как норма. JSON не читается, построчная
-    разметка по timestamp'у не считается — в отличие от предыдущей версии,
-    где атака размечалась по meta["time"]["exploit"][0]["absolute"].
-
-    Используется ТОЛЬКО для оценки качества детекции постфактум, не
-    участвует в детекции как таковой — сама LSTM-модель обучается
-    исключительно на train/val, про атаки "не знает".
-    """
+    
     normal_files, abnormal_files = test_recording_files(service_name)
 
     X_parts: list[np.ndarray] = []

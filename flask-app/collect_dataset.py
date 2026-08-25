@@ -12,23 +12,20 @@ TRAINING_DIR = BASE_DIR / 'training'
 VAL_DIR = BASE_DIR / 'validation'
 TEST_DIR = BASE_DIR / 'test'
 
+NORMAL_TEST_DIR = TEST_DIR / 'normal'
+ABNORMAL_TEST_DIR = TEST_DIR / 'abnormal'
+MIXED_TEST_DIR = TEST_DIR / 'mixed'
+
 NORMAL_PREFIX = 'normal'
 ABNORMAL_PREFIX = 'abnormal'
+MIXED_PREFIX = 'mixed'
 
-# instance_count=0 бессмысленен (0 потоков трафика -> пустой лог), поэтому
-# диапазон 1..9, а не 0..9
 INSTANCE_COUNTS = range(1, 10)
 
-# Суммарная "нагрузка" (instance_count * duration) держится примерно
-# постоянной, чтобы файлы с разным instance_count получались сопоставимого
-# размера, а не росли линейно вместе с instance_count при фиксированной
-# duration=60с (как было: 1 инстанс -> ~3МБ, 6 -> ~23МБ).
 TOTAL_SESSION_SECONDS = 180
-MIN_DURATION = 15  # чтобы при больших instance_count не улетать в считанные секунды
+MIN_DURATION = 15 
 
 def get_real_uid_gid() -> tuple[int, int] | None:
-    """UID/GID пользователя, который вызвал sudo (не root). None, если
-    скрипт запущен не через sudo (тогда chown делать не нужно/нечем)."""
     uid = os.environ.get("SUDO_UID")
     gid = os.environ.get("SUDO_GID")
     if uid is None or gid is None:
@@ -37,8 +34,6 @@ def get_real_uid_gid() -> tuple[int, int] | None:
  
  
 def chown_recursive(path: Path, uid: int, gid: int) -> None:
-    """Переподписывает path и всё его содержимое на реального пользователя
-    вместо root, которым владеют файлы/директории, созданные под sudo."""
     if not path.exists():
         return
     os.chown(path, uid, gid)
@@ -71,16 +66,16 @@ def collect_abnormal(session: EbpfSession, output_dir: Path, prefix: str, id_ran
             ]).run()
 
 
-def collect_normal_and_abnormal(session: EbpfSession, output_dir: Path, prefix: str, id_range: int) -> None:
+def collect_mixed(session: EbpfSession, output_dir: Path, prefix: str, id_range: int) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     for idx in range(id_range):
         output_path = output_dir / f"{prefix}_{idx:03d}.sc"
         with session.collect_to(str(output_path)):
             TrafficRunner([
-                normal(duration=60, instance_count=3),
-                abnormal_command_execution(duration=20),
-                abnormal_network(duration=45),
-                abnormal_process_info(duration=10),
+                normal(duration=50, instance_count=3),
+                abnormal_command_execution(duration=50),
+                abnormal_network(duration=50),
+                abnormal_process_info(duration=50),
             ]).run()
 
 
@@ -93,15 +88,16 @@ def collect_validation(session: EbpfSession) -> None:
 
 
 def collect_test(session: EbpfSession) -> None:
-    collect_abnormal(session, TEST_DIR, ABNORMAL_PREFIX, id_range=10)
-    # collect_normal(session, TEST_DIR, NORMAL_PREFIX, id_range=1)
+    collect_abnormal(session, ABNORMAL_TEST_DIR, ABNORMAL_PREFIX, id_range=10)
+    collect_normal(session, NORMAL_TEST_DIR, NORMAL_PREFIX, id_range=1)
+    collect_mixed(session, MIXED_TEST_DIR, MIXED_PREFIX, id_range=1)
 
 
 if __name__ == '__main__':
     session = EbpfSession(container=CONTAINER)
     try:
-        # collect_training(session)
-        # collect_validation(session)
+        collect_training(session)
+        collect_validation(session)
         collect_test(session)
     finally:
         session.close()
