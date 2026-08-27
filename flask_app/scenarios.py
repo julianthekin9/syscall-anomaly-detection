@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from threading import Barrier, Thread
-from time import time as now
-from time import sleep
+from time import sleep, time_ns
 from typing import Callable
 
 from normal_traffic import run_normal_traffic
@@ -27,13 +26,14 @@ class TrafficRunner:
     После delay экземпляры одного сценария синхронизируются
     через Barrier и одновременно начинают выполнение target.
 
-    run() возвращает фактические timestamps начала сценариев.
+    run() возвращает фактические timestamps начала сценариев
+    в Unix time наносекундах.
     """
 
     def __init__(self, specs: list[TrafficSpec]):
         self._specs = specs
         self._threads: list[Thread] = []
-        self._start_times: dict[str, float] = {}
+        self._start_times: dict[str, int] = {}
 
     def _make_thread(
         self,
@@ -47,11 +47,9 @@ class TrafficRunner:
 
             barrier.wait()
 
-            # Timestamp фиксируется непосредственно перед target.
-            # Для одного spec все его экземпляры получают
-            # практически одно и то же время.
+            # Unix timestamp в наносекундах.
             if spec.name not in self._start_times:
-                self._start_times[spec.name] = now()
+                self._start_times[spec.name] = time_ns()
 
             print(
                 f"Запущен: {spec.name} #{index} "
@@ -110,15 +108,15 @@ class TrafficRunner:
                     f"не завершился вовремя"
                 )
 
-    def run(self) -> dict[str, float]:
+    def run(self) -> dict[str, int]:
         """Запускает трафик, ждёт завершения и возвращает timestamps."""
 
-        start = now()
+        start = time_ns()
 
         self.start()
         self.join()
 
-        elapsed = now() - start
+        elapsed = (time_ns() - start) / 1_000_000_000
 
         print(f"Весь трафик завершён за {elapsed:.1f}с")
 
@@ -179,3 +177,11 @@ def abnormal_process_info(
         delay,
         instance_count,
     )
+
+if __name__ == '__main__':
+    TrafficRunner([
+        normal(duration=50, instance_count=1, delay=0),
+        abnormal_command_execution(duration=30, delay=20),
+        abnormal_network(duration=30, delay=20),
+        abnormal_process_info(duration=30, delay=20),
+    ]).run()

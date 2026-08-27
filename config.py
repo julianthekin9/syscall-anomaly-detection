@@ -27,7 +27,7 @@ VOCAB_DIR = "./vocabs"
 FORCE_REBUILD_VOCAB = False
 
 EMBED_DIM_SYSCALL = 16
-EMBED_DIM_PROCESS = 8   # эмбеддинг ВХОДНОГО признака process (не голова-предсказатель)
+EMBED_DIM_PROCESS = 8   
 EMBED_DIM_DIRECTION = 2
 EMBED_DIM_ARG_COUNT = 4  # используется только если USE_ARG_COUNT_FEATURE=True
 
@@ -46,7 +46,7 @@ RESUME = False
 
 WindowAgg = Literal["quantile", "max"]
 WINDOW_AGG: WindowAgg = "quantile"
-WINDOW_AGG_QUANTILE = 0.9  # используется только если WINDOW_AGG="quantile"
+WINDOW_AGG_QUANTILE = 0.90  # используется только если WINDOW_AGG="quantile"
 
 THRESHOLD_PERCENTILE = 99.0
 

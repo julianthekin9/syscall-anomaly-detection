@@ -1,23 +1,9 @@
-"""torch Dataset для авторегрессионных последовательностей next-syscall
-prediction. Все последовательности фиксированной длины (config.SEQ_LEN) —
-паддинг не нужен, поэтому используется стандартный DataLoader без
-кастомного collate_fn.
-
-X/y хранятся как numpy-массивы (int32/int64), а не как списки Python-
-объектов — на больших датасетах это заметно снижает пиковое потребление
-памяти (см. data.py: make_sequences/build_normal_sequences/build_test_sequences).
-torch.from_numpy() не копирует данные, только оборачивает существующий
-буфер памяти в тензор — конвертация в тензор на каждый __getitem__ дешёвая.
-"""
-
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 
 
 class SequenceDataset(Dataset):
-    """X[i]: [seq_len, num_features] — вход. y[i]: [seq_len] — id следующего
-    syscall'а на каждом шаге (next-token target)."""
 
     def __init__(self, X, y) -> None:
         self.X = np.asarray(X)
@@ -34,10 +20,7 @@ class SequenceDataset(Dataset):
         return x, y
 
 
-class EvalSequenceDataset(Dataset):
-    """То же самое + метка окна (атака/норма) — для diagnostics-оценки на
-    test-сплите в predict.py. Метка НЕ участвует в forward-проходе модели,
-    только возвращается рядом для последующего сравнения с anomaly score."""
+class TestSequenceDataset(Dataset):
 
     def __init__(self, X, y, window_is_attack) -> None:
         self.X = np.asarray(X)

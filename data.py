@@ -22,8 +22,6 @@ _SPLIT_SUBDIR = {
 
 @dataclass
 class ParsedLine:
-    """Одна распарсенная строка .sc-записи."""
-
     timestamp: float  # абсолютные unix-секунды
     syscall: str
     process_name: str
@@ -115,14 +113,14 @@ def test_recording_files(service_name: str) -> tuple[list[Path], list[Path]]:
     test_dir = _split_dir(service_name, "test")
     normal_dir = test_dir / config.TEST_NORMAL_SUBDIR
     abnormal_dir = test_dir / config.TEST_ABNORMAL_SUBDIR
+
     if not normal_dir.is_dir() or not abnormal_dir.is_dir():
         raise FileNotFoundError(
-            f"Ожидались подпапки {normal_dir} и {abnormal_dir} — проверьте "
-            f"config.TEST_NORMAL_SUBDIR/config.TEST_ABNORMAL_SUBDIR на соответствие "
-            f"реальной структуре test-сплита."
+            f"Expected subdirs {normal_dir}, {abnormal_dir}."
         )
     normal_files = sorted(normal_dir.rglob(f"*{config.RECORDING_EXTENSION}"))
     abnormal_files = sorted(abnormal_dir.rglob(f"*{config.RECORDING_EXTENSION}"))
+
     return normal_files, abnormal_files
 
 

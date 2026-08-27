@@ -44,9 +44,9 @@ class ModelHParams:
 
 
 class CheckpointArchitectureMismatch(RuntimeError):
-    """Чекпоинт сохранён другой версией архитектуры модели (см.
-    ARCHITECTURE_VERSION) — веса структурно несовместимы (другой набор
-    слоёв), дообучение/загрузка невозможны, нужно обучение с нуля."""
+    """The checkpoint was saved with a different model architecture version (see
+    ARCHITECTURE_VERSION) — the weights are structurally incompatible (different
+    set of layers), so resuming/loading is impossible; training from scratch is required."""
 
 
 class SyscallLSTM(nn.Module):
@@ -87,12 +87,8 @@ class SyscallLSTM(nn.Module):
         ckpt_version = checkpoint["architecture_version"]
         if ckpt_version != ARCHITECTURE_VERSION:
             raise CheckpointArchitectureMismatch(
-                f"Чекпоинт сохранён архитектурой версии {ckpt_version!r}, а текущий код — "
-                f"версии {ARCHITECTURE_VERSION} (см. model.ARCHITECTURE_VERSION). Скорее всего "
-                f"это чекпоинт из версии с (опциональной) process-головой — в текущей "
-                f"версии архитектуры она убрана полностью. Загрузка/дообучение невозможны — "
-                f"переобучите сервис с нуля: config.RESUME=False (или удалите файл "
-                f"чекпоинта) и запустите train.py заново."
+                f"Checkpoint was saved with architecture version {ckpt_version!r}, while the current code uses "
+                f"version {ARCHITECTURE_VERSION} (see model.ARCHITECTURE_VERSION)."
             )
         hparams = ModelHParams.from_checkpoint(checkpoint)
         model = cls(checkpoint["vocab_sizes"], hparams=hparams).to(device)
@@ -126,7 +122,7 @@ def aggregate_window_scores(step_scores: torch.Tensor, window_agg: str = "max", 
     elif window_agg == "mean":
         return step_scores.mean(dim=1)  # [batch]
     else:
-        raise ValueError(f"Неизвестный window_agg={window_agg!r}, ожидалось 'max', 'quantile' или 'mean'")
+        raise ValueError(f"Unknown window_agg={window_agg!r}; expected 'max', 'quantile', or 'mean'")
 
 
 def compute_window_scores(

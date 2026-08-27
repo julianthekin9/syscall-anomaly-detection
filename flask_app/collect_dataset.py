@@ -51,10 +51,10 @@ def collect_mixed(session: EbpfSession, output_dir: Path, prefix: str, id_range:
         output_path = output_dir / f"{prefix}_{idx:03d}.sc"
         with session.collect_to(str(output_path)):
             TrafficRunner([
-                normal(duration=50, instance_count=3),
-                abnormal_command_execution(duration=50),
-                abnormal_network(duration=50),
-                abnormal_process_info(duration=50),
+                normal(duration=25, instance_count=3),
+                abnormal_command_execution(duration=25, instance_count=2),
+                abnormal_network(duration=25, instance_count=2),
+                abnormal_process_info(duration=25, instance_count=2),
             ]).run()
 
 
@@ -67,16 +67,16 @@ def collect_validation(session: EbpfSession) -> None:
 
 
 def collect_test(session: EbpfSession) -> None:
-    collect_abnormal(session, ABNORMAL_TEST_DIR, ABNORMAL_PREFIX, id_range=10)
-    collect_normal(session, NORMAL_TEST_DIR, NORMAL_PREFIX, id_range=1)
-    collect_mixed(session, MIXED_TEST_DIR, MIXED_PREFIX, id_range=1)
+    # collect_abnormal(session, ABNORMAL_TEST_DIR, ABNORMAL_PREFIX, id_range=10)
+    # collect_normal(session, NORMAL_TEST_DIR, NORMAL_PREFIX, id_range=1)
+    collect_mixed(session, MIXED_TEST_DIR, MIXED_PREFIX, id_range=10)
 
 
 if __name__ == '__main__':
     session = EbpfSession(container=CONTAINER)
     try:
-        collect_training(session)
-        collect_validation(session)
+        # collect_training(session)
+        # collect_validation(session)
         collect_test(session)
     finally:
         session.close()

@@ -1,13 +1,7 @@
-"""Прогон обученной per-service модели на новом логе — считает anomaly
-score по окнам и поднимает алерт, если score выше калиброванного порога.
-
-Использование:
-    # один конкретный .sc-файл (например реальный лог из вашего eBPF-коллектора)
-    python predict.py --service CVE-2012-2122 --log путь/к/логу.sc
-
-    # весь test-сплит сервиса (уже размечен: норма+атаки) — печатает и
-    # алерты по каждому окну, и итоговые метрики качества детекции
-    python predict.py --service CVE-2012-2122 --eval-test-split
+"""
+Usage:
+    python predict.py --service FLASK --log путь/к/логу.sc
+    python predict.py --service FLASK --eval-test-split
 """
 
 import argparse
@@ -18,7 +12,7 @@ from torch.utils.data import DataLoader
 
 import config
 from data import build_test_sequences, encode_recording, make_sequences, read_recording
-from dataset import EvalSequenceDataset, SequenceDataset
+from dataset import TestSequenceDataset, SequenceDataset
 from model import SyscallLSTM, aggregate_window_scores, compute_step_scores
 from train import quick_test_evaluation
 
@@ -26,7 +20,7 @@ from train import quick_test_evaluation
 def load_model(service_name: str, device: torch.device) -> tuple[SyscallLSTM, dict]:
     path = os.path.join(config.MODEL_DIR, f"{service_name}.pt")
     if not os.path.exists(path):
-        raise FileNotFoundError(f"Не найден чекпоинт {path} — сначала обучите модель: python train.py --service {service_name}")
+        raise FileNotFoundError(f"Checkpoint {path} not found — train the model first: python train.py --service {service_name}")
 
     checkpoint = torch.load(path, map_location=device)
     model = SyscallLSTM.from_checkpoint(checkpoint, device)
@@ -40,12 +34,12 @@ def score_log_file(model: SyscallLSTM, checkpoint: dict, log_path: str, device: 
 
     lines = read_recording(log_path)
     if not lines:
-        raise ValueError(f"Не удалось распарсить ни одной строки из {log_path}")
+        raise ValueError(f"Can't parse any line from {log_path}")
 
     encoded = encode_recording(vocabs, lines)
     X, y = make_sequences(encoded, seq_len, seq_len)
     if len(X) == 0:
-        raise ValueError(f"Лог короче {seq_len + 1} событий — недостаточно данных для одного окна")
+        raise ValueError(f"Log shorter than {seq_len + 1} events — not enough events for new window.")
 
     loader = DataLoader(SequenceDataset(X, y), batch_size=config.BATCH_SIZE, shuffle=False)
 
@@ -74,9 +68,9 @@ def print_log_verdict(scores: list[float], threshold: float) -> None:
             alerts += 1
 
     if alerts:
-        print(f"\nИТОГ: {alerts}/{len(scores)} окон превысили порог тревоги — подозрительная активность")
+        print(f"\nІТОГ: {alerts}/{len(scores)} окон превысили порог тревоги — підозріла активність")
     else:
-        print(f"\nИТОГ: все {len(scores)} окон в пределах нормы")
+        print(f"\nІТОГ: усі {len(scores)} вікон в межах норми.")
 
 
 def main() -> None:
@@ -105,7 +99,7 @@ def main() -> None:
         if len(X_test) == 0:
             print(f"[{args.service}] test-сплит пуст или короче SEQ_LEN+1")
             return
-        test_loader = DataLoader(EvalSequenceDataset(X_test, y_test, window_is_attack), batch_size=config.BATCH_SIZE, shuffle=False)
+        test_loader = DataLoader(TestSequenceDataset(X_test, y_test, window_is_attack), batch_size=config.BATCH_SIZE, shuffle=False)
         print(f"\nОценка на test-сплите сервиса {args.service} ({len(X_test)} окон):")
         quick_test_evaluation(model, test_loader, threshold, device)
 

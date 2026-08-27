@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 import config
 import resource_guard
 from data import build_normal_sequences, build_test_sequences, build_vocab, list_services
-from dataset import EvalSequenceDataset, SequenceDataset
+from dataset import TestSequenceDataset, SequenceDataset
 from model import ARCHITECTURE_VERSION, ModelHParams, SyscallLSTM, aggregate_window_scores, compute_step_scores
 from visualization import plot_training_curves
 
@@ -209,7 +209,7 @@ def train_one_service(service_name: str, device: torch.device) -> None:
     X_test, y_test, window_is_attack = build_test_sequences(service_name, vocabs, config.SEQ_LEN, config.SEQ_LEN)
     test_loader: DataLoader | None = None
     if len(X_test):
-        test_loader = DataLoader(EvalSequenceDataset(X_test, y_test, window_is_attack), batch_size=config.BATCH_SIZE, shuffle=False)
+        test_loader = DataLoader(TestSequenceDataset(X_test, y_test, window_is_attack), batch_size=config.BATCH_SIZE, shuffle=False)
     else:
         print(f"[{service_name}] test-спліт порожній або коротший за SEQ_LEN+1 — diagnostics-оцінка недоступна")
 
