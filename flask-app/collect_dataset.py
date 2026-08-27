@@ -2,8 +2,7 @@ from pathlib import Path
 
 from scenarios import TrafficRunner, normal, abnormal_command_execution, abnormal_network, abnormal_process_info
 from ebpf import EbpfSession
-import os
-
+from sudo_utils import get_real_uid_gid, chown_recursive
 
 CONTAINER = 'flask-app'
 
@@ -24,26 +23,6 @@ INSTANCE_COUNTS = range(1, 10)
 
 TOTAL_SESSION_SECONDS = 180
 MIN_DURATION = 15 
-
-def get_real_uid_gid() -> tuple[int, int] | None:
-    uid = os.environ.get("SUDO_UID")
-    gid = os.environ.get("SUDO_GID")
-    if uid is None or gid is None:
-        return None
-    return int(uid), int(gid)
- 
- 
-def chown_recursive(path: Path, uid: int, gid: int) -> None:
-    if not path.exists():
-        return
-    os.chown(path, uid, gid)
-    for root, dirs, files in os.walk(path):
-        for name in dirs:
-            os.chown(os.path.join(root, name), uid, gid)
-        for name in files:
-            os.chown(os.path.join(root, name), uid, gid)
-
-
 
 def collect_normal(session: EbpfSession, output_dir: Path, prefix: str, id_range: int) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
