@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque, namedtuple
 from contextlib import contextmanager
 
 from bcc import BPF
@@ -172,6 +173,59 @@ class Collector:
         self.log.close()
 
 
+RawEvent = namedtuple("RawEvent", ["timestamp", "process_name", "syscall", "direction", "arg_count"])
+
+
+class RealTimeCollector:
+    def __init__(self, syscall_table: dict[int, str], buffer_size: int = 10_000) -> None:
+        self.syscall_table = syscall_table
+        self.wall_clock_offset_ns = time.time_ns() - time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+        self.event_counter = 0
+        self._lock = threading.Lock()
+        self._buffer: deque[RawEvent] = deque(maxlen=buffer_size)
+
+    def to_absolute_unix_ns(self, ts_ns: int) -> int:
+        return ts_ns + self.wall_clock_offset_ns
+
+    def handle_event(self, cpu: int, data, size: int) -> None:  # noqa: ARG002
+        event = ct.cast(data, ct.POINTER(Event)).contents
+        self.event_counter += 1
+
+        name = syscall_name(self.syscall_table, event.syscall_id)
+        if name == "switch":
+            return  # как и data.read_recording() при чтении .sc-файлов — эти события не участвуют в обучении/инференсе
+
+        process_name = event.comm.decode("utf-8", errors="replace")
+        is_enter = event.direction == 0
+        direction = ">" if is_enter else "<"
+        arg_count = 6 if is_enter else 1
+        timestamp_sec = self.to_absolute_unix_ns(event.ts_ns) / 1e9
+
+        raw = RawEvent(
+            timestamp=timestamp_sec,
+            process_name=process_name,
+            syscall=name,
+            direction=direction,
+            arg_count=arg_count,
+        )
+        with self._lock:
+            self._buffer.append(raw)
+
+    def snapshot_tail(self, n: int) -> list[RawEvent] | None:
+        """Последние n событий буфера, или None, если их пока меньше n."""
+        with self._lock:
+            if len(self._buffer) < n:
+                return None
+            return list(self._buffer)[-n:]
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._buffer)
+
+    def close(self) -> None:
+        pass  # на диске ничего не открыто — метод для симметрии с Collector.close()
+
+
 class EbpfSession:
 
     def __init__(self, container: str | None = None, pid: int | None = None) -> None:
@@ -192,7 +246,7 @@ class EbpfSession:
         self.bpf = BPF(text=BPF_PROGRAM)
         self.bpf["cgroup_filter"][ct.c_int(0)] = ct.c_uint64(self.cgroup_id)
 
-        self._current_collector: Collector | None = None
+        self._current_collector: Collector | RealTimeCollector | None = None
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
 
@@ -213,8 +267,6 @@ class EbpfSession:
 
     @contextmanager
     def collect_to(self, output_path: str):
-        """Все syscall-события текущего cgroup'а на время `with`-блока
-        пишутся в output_path. Один Collector — на один вызов."""
         collector = Collector(output_path, self.syscall_table)
         with self._lock:
             self._current_collector = collector
@@ -226,6 +278,14 @@ class EbpfSession:
                 self._current_collector = None
             collector.close()
             print(f"Готово: {output_path}, событий: {collector.event_counter}")
+
+    def attach_collector(self, collector: "Collector | RealTimeCollector") -> None:
+        with self._lock:
+            self._current_collector = collector
+
+    def detach_collector(self) -> None:
+        with self._lock:
+            self._current_collector = None
 
     def refresh_cgroup(self, container: str) -> None:
         self.pid = resolve_pid(container)

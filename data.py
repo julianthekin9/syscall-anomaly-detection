@@ -213,7 +213,7 @@ def make_sequences(rows: np.ndarray, seq_len: int, step: int) -> tuple[np.ndarra
     n = len(rows)
     needed = seq_len + 1
     if n < needed:
-        return np.empty((0, seq_len, n_feat), dtype=_SEQ_DTYPE), np.empty((0, seq_len, 2), dtype=_SEQ_DTYPE)
+        return np.empty((0, seq_len, n_feat), dtype=_SEQ_DTYPE), np.empty((0, seq_len, 1), dtype=_SEQ_DTYPE)
 
     starts = list(range(0, n - needed + 1, step))
     last_start = starts[-1] if starts else 0
@@ -222,12 +222,13 @@ def make_sequences(rows: np.ndarray, seq_len: int, step: int) -> tuple[np.ndarra
 
     n_windows = len(starts)
     X = np.empty((n_windows, seq_len, n_feat), dtype=_SEQ_DTYPE)
-    y = np.empty((n_windows, seq_len, 2), dtype=_SEQ_DTYPE)
+    # последняя размерность оставлена (=1), а не убрана совсем, чтобы
+    # model.compute_step_scores(targets[..., 0]) не пришлось менять
+    y = np.empty((n_windows, seq_len, 1), dtype=_SEQ_DTYPE)
     for i, start in enumerate(starts):
         chunk = rows[start : start + needed]
         X[i] = chunk[:-1]
-        y[i, :, 0] = chunk[1:, 0]  # next syscall
-        y[i, :, 1] = chunk[1:, 1]  # next process
+        y[i, :, 0] = chunk[1:, 0]  # next syscall — единственная цель после удаления process-головы
     return X, y
 
 
@@ -250,7 +251,7 @@ def build_normal_sequences(
             resource_guard.check_ram(f"{service_name}/{split}: после {i + 1} записей")
 
     if not X_parts:
-        return np.empty((0, seq_len, num_features()), dtype=_SEQ_DTYPE), np.empty((0, seq_len, 2), dtype=_SEQ_DTYPE)
+        return np.empty((0, seq_len, num_features()), dtype=_SEQ_DTYPE), np.empty((0, seq_len, 1), dtype=_SEQ_DTYPE)
 
     resource_guard.check_ram(f"{service_name}/{split}: перед склейкой ({len(X_parts)} записей)")
     X_all = np.concatenate(X_parts, axis=0)
@@ -291,7 +292,7 @@ def build_test_sequences(
     if not X_parts:
         return (
             np.empty((0, seq_len, num_features()), dtype=_SEQ_DTYPE),
-            np.empty((0, seq_len, 2), dtype=_SEQ_DTYPE),
+            np.empty((0, seq_len, 1), dtype=_SEQ_DTYPE),
             np.empty((0,), dtype=bool),
         )
 

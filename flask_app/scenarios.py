@@ -180,8 +180,8 @@ def abnormal_process_info(
 
 if __name__ == '__main__':
     TrafficRunner([
-        normal(duration=50, instance_count=1, delay=0),
-        abnormal_command_execution(duration=30, delay=20),
-        abnormal_network(duration=30, delay=20),
-        abnormal_process_info(duration=30, delay=20),
+        normal(duration=80, instance_count=5, delay=0),
+        abnormal_command_execution(duration=20, delay=20),
+        abnormal_network(duration=20, delay=20),
+        abnormal_process_info(duration=20, delay=20),
     ]).run()
