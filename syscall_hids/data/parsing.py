@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from syscall_hids import config
+from syscall_hids.data import format as fmt
 
 @dataclass
 class ParsedLine:
@@ -14,22 +14,22 @@ class ParsedLine:
 def parse_log_line(line: str) -> ParsedLine | None:
     """Парсит одну строку .sc-записи. Возвращает None для "мусорных" строк."""
     fields = line.strip().split(" ")
-    if len(fields) < config.MIN_RAW_FIELDS:
+    if len(fields) < fmt.MIN_RAW_FIELDS:
         return None
 
     try:
-        timestamp_ns = int(fields[config.TIME_COLUMN_INDEX])
+        timestamp_ns = int(fields[fmt.TIME_COLUMN_INDEX])
     except (ValueError, IndexError):
         return None
 
     try:
-        syscall = fields[config.SYSCALL_COLUMN_INDEX]
-        process_name = fields[config.PROCESS_NAME_COLUMN_INDEX]
-        direction = fields[config.DIRECTION_COLUMN_INDEX]
+        syscall = fields[fmt.SYSCALL_COLUMN_INDEX]
+        process_name = fields[fmt.PROCESS_NAME_COLUMN_INDEX]
+        direction = fields[fmt.DIRECTION_COLUMN_INDEX]
     except IndexError:
         return None
 
-    arg_count = max(0, len(fields) - config.PARAMS_BEGIN_INDEX)
+    arg_count = max(0, len(fields) - fmt.PARAMS_BEGIN_INDEX)
 
     return ParsedLine(
         timestamp=timestamp_ns / 1e9,

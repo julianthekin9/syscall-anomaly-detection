@@ -1,67 +1,75 @@
 from pathlib import Path
 from typing import Literal
 
-from syscall_hids import config
+from syscall_hids.data.format import RECORDING_EXTENSION
+
+# Розкладка датасету (не параметри експерименту)
+TRAIN_SUBDIR = "training"
+VAL_SUBDIR = "validation"
+TEST_SUBDIR = "test"
+
+TEST_NORMAL_SUBDIR = "normal"
+TEST_ABNORMAL_SUBDIR = "abnormal"
 
 Split = Literal["train", "val", "test"]
 
 _SPLIT_SUBDIR = {
-    "train": config.TRAIN_SUBDIR,
-    "val": config.VAL_SUBDIR,
-    "test": config.TEST_SUBDIR,
+    "train": TRAIN_SUBDIR,
+    "val": VAL_SUBDIR,
+    "test": TEST_SUBDIR,
 }
 
 
-def _root_is_single_service() -> bool:
-    root = Path(config.DATASET_ROOT)
-    return (root / config.TRAIN_SUBDIR).is_dir() and (root / config.TEST_SUBDIR).is_dir()
+def _root_is_single_service(dataset_root: str) -> bool:
+    root = Path(dataset_root)
+    return (root / TRAIN_SUBDIR).is_dir() and (root / TEST_SUBDIR).is_dir()
 
 
-def list_services() -> list[str]:
-    root = Path(config.DATASET_ROOT)
+def list_services(dataset_root: str, services: list[str] | None) -> list[str]:
+    root = Path(dataset_root)
     if not root.exists():
-        raise FileNotFoundError(f"Не найдена DATASET_ROOT={root} — проверьте config.DATASET_ROOT.")
+        raise FileNotFoundError(f"Не найдена dataset_root={root} — проверьте --dataset_root.")
 
-    if _root_is_single_service():
+    if _root_is_single_service(dataset_root):
         names = [root.name]
     else:
         names = sorted(p.name for p in root.iterdir() if p.is_dir())
 
-    if config.SERVICES is not None:
-        names = [n for n in names if n in config.SERVICES]
+    if services is not None:
+        names = [n for n in names if n in services]
     return names
 
 
-def _split_dir(service_name: str, split: Split) -> Path:
-    root = Path(config.DATASET_ROOT)
-    if _root_is_single_service() and service_name == root.name:
+def _split_dir(service_name: str, split: Split, dataset_root: str) -> Path:
+    root = Path(dataset_root)
+    if _root_is_single_service(dataset_root) and service_name == root.name:
         return root / _SPLIT_SUBDIR[split]
     return root / service_name / _SPLIT_SUBDIR[split]
 
 
-def recording_files(service_name: str, split: Split) -> list[Path]:
-    split_dir = _split_dir(service_name, split)
+def recording_files(service_name: str, split: Split, dataset_root: str) -> list[Path]:
+    split_dir = _split_dir(service_name, split, dataset_root)
     if not split_dir.exists():
         raise FileNotFoundError(
-            f"Не найдена папка сплита {split_dir} — проверьте config.{split.upper()}_SUBDIR "
+            f"Не найдена папка сплита {split_dir} — проверьте {split.upper()}_SUBDIR "
             f"на соответствие реальной структуре датасета (ожидается либо "
-            f"DATASET_ROOT/<сценарий>/<{split}-подпапка>, либо, если DATASET_ROOT "
-            f"уже указывает на папку одного сценария, DATASET_ROOT/<{split}-подпапка>)."
+            f"dataset_root/<сценарий>/<{split}-подпапка>, либо, если dataset_root "
+            f"уже указывает на папку одного сценария, dataset_root/<{split}-подпапка>)."
         )
-    return sorted(split_dir.rglob(f"*{config.RECORDING_EXTENSION}"))
+    return sorted(split_dir.rglob(f"*{RECORDING_EXTENSION}"))
 
 
-def test_recording_files(service_name: str) -> tuple[list[Path], list[Path]]:
+def test_recording_files(service_name: str, dataset_root: str) -> tuple[list[Path], list[Path]]:
 
-    test_dir = _split_dir(service_name, "test")
-    normal_dir = test_dir / config.TEST_NORMAL_SUBDIR
-    abnormal_dir = test_dir / config.TEST_ABNORMAL_SUBDIR
+    test_dir = _split_dir(service_name, "test", dataset_root)
+    normal_dir = test_dir / TEST_NORMAL_SUBDIR
+    abnormal_dir = test_dir / TEST_ABNORMAL_SUBDIR
 
     if not normal_dir.is_dir() or not abnormal_dir.is_dir():
         raise FileNotFoundError(
             f"Expected subdirs {normal_dir}, {abnormal_dir}."
         )
-    normal_files = sorted(normal_dir.rglob(f"*{config.RECORDING_EXTENSION}"))
-    abnormal_files = sorted(abnormal_dir.rglob(f"*{config.RECORDING_EXTENSION}"))
+    normal_files = sorted(normal_dir.rglob(f"*{RECORDING_EXTENSION}"))
+    abnormal_files = sorted(abnormal_dir.rglob(f"*{RECORDING_EXTENSION}"))
 
     return normal_files, abnormal_files

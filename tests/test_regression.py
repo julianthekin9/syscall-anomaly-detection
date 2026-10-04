@@ -37,7 +37,8 @@ def case(request) -> tuple[dict, dict[str, list[float]]]:
     checkpoint = torch.load(GOLDEN_DIR / ckpt_name, map_location=device)
     model = SyscallLSTM.from_checkpoint(checkpoint, device)
     model.eval()
-    current = {name: score_log_file(model, checkpoint, str(data_dir / name), device) for name in golden["scores"]}
+    # batch_size=32 — колишній config.BATCH_SIZE, з яким знято еталон
+    current = {name: score_log_file(model, checkpoint, str(data_dir / name), device, 32) for name in golden["scores"]}
     return golden, current
 
 

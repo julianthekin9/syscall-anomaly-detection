@@ -3,7 +3,8 @@
 Еталон (golden.json -> "train", FIXT.pt) знято tests/golden/make_golden.py --train зі
 старого коду з тими самими параметрами (golden.json -> "train" -> "config") і seed.
 
-На етапі 3 цей тест переписується під args, еталон (golden.json, FIXT.pt) НЕ перегенерується.
+На етапі 3 тест переписано під args; еталон (golden.json, FIXT.pt) НЕ перегенерувався.
+Параметри в еталоні записані старими іменами config, OLD_CONFIG_TO_ARG переводить їх в аргументи.
 """
 
 import json
@@ -13,13 +14,52 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
+import yaml
 
-from syscall_hids import config
-from syscall_hids.tools import evaluation
+from syscall_hids.tools import evaluation, resource_guard
 from syscall_hids.tools import train as train_module
+from syscall_hids.tools.arg_parser import build_default_arg_parser
+from syscall_hids.tools.arg_parser_tools import check_args
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 FLOAT_TOL = 1e-5
+OLD_CONFIG_TO_ARG = {
+    "SERVICES": "services",
+    "USE_ARG_COUNT_FEATURE": "use_arg_count_feature",
+    "ARG_COUNT_BUCKETS": "arg_count_buckets",
+    "FORCE_REBUILD_VOCAB": "force_rebuild_vocab",
+    "EMBED_DIM_SYSCALL": "embed_dim_syscall",
+    "EMBED_DIM_PROCESS": "embed_dim_process",
+    "EMBED_DIM_DIRECTION": "embed_dim_direction",
+    "EMBED_DIM_ARG_COUNT": "embed_dim_arg_count",
+    "HIDDEN_DIM": "hidden_dim",
+    "NUM_LAYERS": "num_layers",
+    "DROPOUT": "dropout",
+    "SEQ_LEN": "seq_len",
+    "SEQ_STEP": "seq_step",
+    "BATCH_SIZE": "batch_size",
+    "LEARNING_RATE": "lr",
+    "EPOCHS": "max_num_epochs",
+    "RESUME": "restart_latest",
+    "WINDOW_AGG": "window_agg",
+    "WINDOW_AGG_QUANTILE": "window_agg_quantile",
+    "THRESHOLD_PERCENTILE": "threshold_percentile",
+    "EVAL_TEST_EVERY_EPOCH": "eval_test_every_epoch",
+    "METRICS_EVAL_EVERY_N_EPOCHS": "metrics_eval_every_n_epochs",
+    "TRAIN_METRICS_MAX_BATCHES": "train_metrics_max_batches",
+    "RAM_GUARD_ENABLED": "ram_guard_enabled",
+}
+
+
+def _argv_from_golden_config(golden_config: dict) -> list[str]:
+    argv: list[str] = []
+    for key, value in golden_config.items():
+        flag = f"--{OLD_CONFIG_TO_ARG[key]}"
+        if isinstance(value, list):
+            argv += [flag, *map(str, value)]
+        else:
+            argv += [flag, str(value)]  # True/False/None розбирають str2bool та int_or_none
+    return argv
 
 
 def _close(actual: float | None, expected: float | None) -> bool:
@@ -41,29 +81,28 @@ def trained(golden: dict, tmp_path_factory) -> dict:
     test_aucs: list[float] = []
     deterministic = torch.are_deterministic_algorithms_enabled()
     try:
-        for key, value in golden["config"].items():
-            mp.setattr(config, key, value)
-        mp.setattr(config, "DATASET_ROOT", str(GOLDEN_DIR / "data"))
-        mp.setattr(config, "MODEL_DIR", str(tmp / "models"))
-        mp.setattr(config, "CHECKPOINT_DIR", str(tmp / "models" / "checkpoints"))
-        mp.setattr(config, "VOCAB_DIR", str(tmp / "vocabs"))
-        mp.setattr(config, "PLOTS_DIR", str(tmp / "plots"))
+        argv = _argv_from_golden_config(golden["config"])
+        argv += ["--dataset_root", str(GOLDEN_DIR / "data"), "--work_dir", str(tmp)]
+        args, _ = check_args(build_default_arg_parser().parse_args(argv))
+        resource_guard.configure(
+            args.ram_guard_enabled, args.ram_soft_limit_percent, args.ram_hard_limit_percent, args.ram_throttle_sleep_sec
+        )
         mp.chdir(tmp)
         # Метрики знімаються на вході функцій малювання, як і в make_golden.py
-        mp.setattr(train_module, "plot_training_curves", lambda service, h: history.update(h))
-        mp.setattr(evaluation, "plot_roc_curve", lambda truth, scores, service, auc, tags: test_aucs.append(auc))
+        mp.setattr(train_module, "plot_training_curves", lambda service, h, plots_dir: history.update(h))
+        mp.setattr(evaluation, "plot_roc_curve", lambda truth, scores, service, auc, tags, plots_dir: test_aucs.append(auc))
 
         random.seed(golden["seed"])
         np.random.seed(golden["seed"])
         torch.manual_seed(golden["seed"])
         torch.use_deterministic_algorithms(True)
-        train_module.train_one_service("FIXT", torch.device("cpu"))
+        train_module.train_one_service("FIXT", torch.device("cpu"), args)
     finally:
         torch.use_deterministic_algorithms(deterministic)
         mp.undo()
 
-    checkpoint = torch.load(tmp / "models" / "FIXT.pt", map_location="cpu")
-    return {"checkpoint": checkpoint, "history": history, "test_aucs": test_aucs}
+    checkpoint = torch.load(Path(args.model_dir) / "FIXT.pt", map_location="cpu")
+    return {"checkpoint": checkpoint, "history": history, "test_aucs": test_aucs, "args": args}
 
 
 def test_vocab_and_hparams_exact(golden: dict, trained: dict) -> None:
@@ -98,3 +137,13 @@ def test_state_dict_sum_and_norm(golden: dict, trained: dict) -> None:
         tensor = state[name].double()
         assert _close(tensor.sum().item(), exp_sum), f"{name}: sum"
         assert _close(tensor.norm().item(), exp_norm), f"{name}: norm"
+
+
+def test_reproducibility_artifacts(trained: dict) -> None:
+    """train_args у чекпоінті та {model_dir}/FIXT_config.yaml, який розбирається назад у ті самі args."""
+    args = trained["args"]
+    assert trained["checkpoint"]["train_args"] == vars(args)
+    config_path = Path(args.model_dir) / "FIXT_config.yaml"
+    assert yaml.safe_load(config_path.read_text(encoding="utf-8")) == {k: v for k, v in vars(args).items() if k != "config"}
+    reparsed, _ = check_args(build_default_arg_parser().parse_args(["--config", str(config_path)]))
+    assert {k: v for k, v in vars(reparsed).items() if k != "config"} == {k: v for k, v in vars(args).items() if k != "config"}

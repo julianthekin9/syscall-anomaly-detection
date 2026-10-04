@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from sklearn.metrics import classification_report, roc_auc_score
 from torch.utils.data import DataLoader
 
-from syscall_hids import config
 from syscall_hids.modules.models import SyscallLSTM
 from syscall_hids.modules.scoring import aggregate_window_scores, compute_step_scores
 from syscall_hids.tools.visualization import plot_roc_curve
@@ -61,7 +60,14 @@ def evaluate_metrics(
     }
 
 
-def calibrate_threshold(model: SyscallLSTM, val_loader: DataLoader, device: torch.device) -> float:
+def calibrate_threshold(
+    model: SyscallLSTM,
+    val_loader: DataLoader,
+    device: torch.device,
+    window_agg: str,
+    window_agg_quantile: float,
+    threshold_percentile: float,
+) -> float:
     model.eval()
     scores: list[float] = []
     with torch.no_grad():
@@ -70,10 +76,10 @@ def calibrate_threshold(model: SyscallLSTM, val_loader: DataLoader, device: torc
             logits_syscall = model(x)
             step_scores = compute_step_scores(logits_syscall, y)
             window_scores = aggregate_window_scores(
-                step_scores, window_agg=config.WINDOW_AGG, window_agg_quantile=config.WINDOW_AGG_QUANTILE
+                step_scores, window_agg=window_agg, window_agg_quantile=window_agg_quantile
             )
             scores.extend(window_scores.cpu().tolist())
-    return float(np.percentile(scores, config.THRESHOLD_PERCENTILE))
+    return float(np.percentile(scores, threshold_percentile))
 
 
 def quick_test_evaluation(
@@ -83,6 +89,9 @@ def quick_test_evaluation(
     device: torch.device,
     service_name: str,
     roc_tags: tuple[str, ...],
+    window_agg: str,
+    window_agg_quantile: float,
+    plots_dir: str,
 ) -> None:
     model.eval()
     steps_parts: list[torch.Tensor] = []
@@ -101,16 +110,16 @@ def quick_test_evaluation(
 
     all_steps = torch.cat(steps_parts, dim=0)
     window_scores = aggregate_window_scores(
-        all_steps, window_agg=config.WINDOW_AGG, window_agg_quantile=config.WINDOW_AGG_QUANTILE
+        all_steps, window_agg=window_agg, window_agg_quantile=window_agg_quantile
     ).tolist()
     predicted_attack = [s > threshold for s in window_scores]
 
-    print(f"(агрегація вікна: {config.WINDOW_AGG}, score = NLL наступного syscall'а)")
+    print(f"(агрегація вікна: {window_agg}, score = NLL наступного syscall'а)")
     print(classification_report(truth, predicted_attack, target_names=["Normal", "Attack"], digits=3, zero_division=0))
     if len(set(truth)) == 2:
         auc = roc_auc_score(truth, window_scores)
         print(f"Площа під ROC-кривою (ROC-AUC): {auc:.4f}")
-        plot_roc_curve(truth, window_scores, service_name, auc, roc_tags)
+        plot_roc_curve(truth, window_scores, service_name, auc, roc_tags, plots_dir)
     else:
         print("У test-спліті присутній тільки один клас вікон — ROC-AUC не рахується")
 
@@ -122,12 +131,18 @@ def calibrate_and_evaluate(
     test_loader: DataLoader | None,
     device: torch.device,
     roc_tags: tuple[str, ...],
+    args,
     epoch_label: str | None = None,
 ) -> float:
-    threshold = calibrate_threshold(model, val_loader, device)
+    threshold = calibrate_threshold(
+        model, val_loader, device, args.window_agg, args.window_agg_quantile, args.threshold_percentile
+    )
     prefix = f"[{service_name}]" + (f" ({epoch_label})" if epoch_label else "")
-    print(f"{prefix} поріг тривоги (nll, {config.THRESHOLD_PERCENTILE}-й перцентиль val): {threshold:.4f}")
+    print(f"{prefix} поріг тривоги (nll, {args.threshold_percentile}-й перцентиль val): {threshold:.4f}")
     if test_loader is not None:
         print(f"{prefix} diagnostics-оцінка на test-спліті:")
-        quick_test_evaluation(model, test_loader, threshold, device, service_name, roc_tags)
+        quick_test_evaluation(
+            model, test_loader, threshold, device, service_name, roc_tags,
+            args.window_agg, args.window_agg_quantile, args.plots_dir,
+        )
     return threshold

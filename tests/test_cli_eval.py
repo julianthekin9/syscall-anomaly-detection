@@ -7,7 +7,6 @@ from pathlib import Path
 
 import torch
 
-from syscall_hids import config
 from syscall_hids.cli import eval_recordings
 from syscall_hids.tools import evaluation
 
@@ -20,15 +19,15 @@ def test_eval_test_split_matches_golden_auc(tmp_path: Path, monkeypatch) -> None
         shutil.copytree(GOLDEN_DIR / "data" / group, tmp_path / "FLASK" / "test" / group)
     shutil.copy(GOLDEN_DIR / "FLASK.pt", tmp_path / "FLASK.pt")
 
-    monkeypatch.setattr(config, "DATASET_ROOT", str(tmp_path))
-    monkeypatch.setattr(config, "MODEL_DIR", str(tmp_path))
-    monkeypatch.setattr(config, "PLOTS_DIR", str(tmp_path))
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)  # еталон рахувався на CPU
 
     reported: list[float] = []
-    monkeypatch.setattr(evaluation, "plot_roc_curve", lambda truth, scores, service, auc, tags: reported.append(auc))
-    monkeypatch.setattr(sys, "argv", ["hids-eval", "--service", "FLASK", "--eval-test-split"])
+    monkeypatch.setattr(evaluation, "plot_roc_curve", lambda truth, scores, service, auc, tags, plots_dir: reported.append(auc))
+    monkeypatch.setattr(sys, "argv", [
+        "hids-eval", "--service", "FLASK", "--eval-test-split",
+        "--dataset_root", str(tmp_path), "--model_dir", str(tmp_path), "--plots_dir", str(tmp_path),
+    ])
 
     eval_recordings.main()
 

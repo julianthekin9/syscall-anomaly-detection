@@ -7,10 +7,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from syscall_hids import config
 
-
-def plot_training_curves(service_name: str, history: dict[str, list[float]]) -> str | None:
+def plot_training_curves(service_name: str, history: dict[str, list[float]], plots_dir: str) -> str | None:
     epochs = history.get("epoch", [])
     if not epochs:
         print(f"[{service_name}] history порожня — графік не будую")
@@ -34,8 +32,8 @@ def plot_training_curves(service_name: str, history: dict[str, list[float]]) -> 
     fig.suptitle("Метрики по епохах")
     fig.tight_layout()
 
-    os.makedirs(config.PLOTS_DIR, exist_ok=True)
-    out_path = os.path.join(config.PLOTS_DIR, f"{service_name}_epochs.png")
+    os.makedirs(plots_dir, exist_ok=True)
+    out_path = os.path.join(plots_dir, f"{service_name}_epochs.png")
     fig.savefig(out_path, dpi=120)
     plt.close(fig)
     return out_path
@@ -81,8 +79,10 @@ def plot_file_timeline(
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
-def plot_roc_curve(truth: list[bool], scores: list[float], service_name: str, auc: float, tags: tuple[str, ...]) -> None:
-    """Побудова ROC-кривої; зберігається в config.PLOTS_DIR як <сервіс>_roc_<тег>.png для кожного тегу."""
+def plot_roc_curve(
+    truth: list[bool], scores: list[float], service_name: str, auc: float, tags: tuple[str, ...], plots_dir: str
+) -> None:
+    """Побудова ROC-кривої; зберігається в plots_dir як <сервіс>_roc_<тег>.png для кожного тегу."""
     from sklearn.metrics import roc_curve
 
     fpr, tpr, _ = roc_curve(truth, scores)
@@ -97,9 +97,9 @@ def plot_roc_curve(truth: list[bool], scores: list[float], service_name: str, au
     plt.grid(True)
     plt.tight_layout()
 
-    os.makedirs(config.PLOTS_DIR, exist_ok=True)
+    os.makedirs(plots_dir, exist_ok=True)
     for tag in tags:
-        path = os.path.join(config.PLOTS_DIR, f"{service_name}_roc_{tag}.png")
+        path = os.path.join(plots_dir, f"{service_name}_roc_{tag}.png")
         plt.savefig(path, dpi=150)
         print(f"[{service_name}] ROC-криву збережено у {path}")
     plt.close()

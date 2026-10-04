@@ -4,7 +4,6 @@ Usage:
     sudo hids-detect --service FLASK --container flask-app --duration 120 --scan-interval 0.5
 """
 
-import argparse
 import csv
 import time
 from datetime import datetime
@@ -17,12 +16,16 @@ from syscall_hids.data.parsing import ParsedLine
 from syscall_hids.data.sequences import encode_line
 from syscall_hids.modules.models import SyscallLSTM
 from syscall_hids.modules.scoring import compute_step_scores, aggregate_window_scores
-from syscall_hids.tools.checkpoint import load_model
+from syscall_hids.tools.arg_parser import build_detect_arg_parser
+from syscall_hids.tools.arg_parser_tools import check_args
+from syscall_hids.tools.checkpoint import checkpoint_features, load_model
 from syscall_hids.tools.visualization import plot_file_timeline
 import numpy as np
 
 
-def encode_tail(vocabs: dict[str, dict[str, int]], raw_events) -> tuple[list[list[int]], list[float]]:
+def encode_tail(
+    vocabs: dict[str, dict[str, int]], raw_events, use_arg_count_feature: bool, arg_count_buckets: int
+) -> tuple[list[list[int]], list[float]]:
     rows: list[list[int]] = []
     timestamps: list[float] = []
     for raw in raw_events:
@@ -33,7 +36,7 @@ def encode_tail(vocabs: dict[str, dict[str, int]], raw_events) -> tuple[list[lis
             direction=raw.direction,
             arg_count=raw.arg_count,
         )
-        rows.append(encode_line(vocabs, parsed))
+        rows.append(encode_line(vocabs, parsed, use_arg_count_feature, arg_count_buckets))
         timestamps.append(raw.timestamp)
     return rows, timestamps
 
@@ -48,17 +51,10 @@ def score_window(model, rows: list[list[int]], device: torch.device) -> float:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--service", default="FLASK", help="Имя сервиса: модель config.MODEL_DIR/<service>.pt и префикс файлов прогона")
-    parser.add_argument("--container", default="flask-app", help="Docker-контейнер, syscall'ы которого отслеживаются")
-    parser.add_argument("--checkpoint", default=None, help="Явный путь к .pt (по умолчанию — config.MODEL_DIR/<service>.pt)")
-    parser.add_argument("--scan-interval", type=float, default=1.0, help="Пауза между проверками окна, сек")
-    parser.add_argument("--duration", type=float, default=0.0, help="Остановиться через N секунд (0 = до Ctrl+C)")
-    parser.add_argument("--out-dir", default="./realtime_runs", help="Куда сохранять CSV/график по завершении")
-    parser.add_argument("--attack-marker", type=float, default=None,
-                         help="Для тестовых прогонов: секунды от старта, когда была инициирована атака "
-                              "(рисуется вертикальной линией на итоговом графике, как в probe_eval)")
-    args = parser.parse_args()
+    parser = build_detect_arg_parser(description=__doc__)
+    args, input_log_messages = check_args(parser.parse_args())
+    for message in input_log_messages:
+        print(f"УВАГА: {message}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -67,13 +63,14 @@ def main() -> None:
         model = SyscallLSTM.from_checkpoint(checkpoint, device)
         model.eval()
     else:
-        model, checkpoint = load_model(args.service, device)
+        model, checkpoint = load_model(args.service, device, args.model_dir)
 
     vocabs = checkpoint["vocabs"]
     seq_len = checkpoint["seq_len"]
     window_agg = checkpoint["window_agg"]
     window_agg_quantile = checkpoint["window_agg_quantile"]
     threshold = checkpoint["threshold"]
+    use_arg_count_feature, arg_count_buckets = checkpoint_features(checkpoint)
     needed = seq_len + 1
 
     print(f"[{args.service}] device={device} seq_len={seq_len} window_agg={window_agg} threshold={threshold:.4f}")
@@ -100,7 +97,7 @@ def main() -> None:
             if collector.event_counter != last_scored_event_count:
                 raw_tail = collector.snapshot_tail(needed)
                 if raw_tail is not None:
-                    rows, timestamps = encode_tail(vocabs, raw_tail)
+                    rows, timestamps = encode_tail(vocabs, raw_tail, use_arg_count_feature, arg_count_buckets)
                     step_scores = score_window(model, rows, device)
                     score = aggregate_window_scores(
                         step_scores, window_agg=window_agg, window_agg_quantile=window_agg_quantile

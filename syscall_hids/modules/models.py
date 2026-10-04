@@ -3,7 +3,6 @@ from dataclasses import asdict, dataclass
 import torch
 from torch import nn
 
-from syscall_hids import config
 from syscall_hids.data.vocab import FEATURE_NAMES
 
 ARCHITECTURE_VERSION = 3
@@ -21,16 +20,16 @@ class ModelHParams:
     dropout: float
 
     @classmethod
-    def from_config(cls) -> "ModelHParams":
+    def from_args(cls, args) -> "ModelHParams":
         return cls(
-            embed_dim_syscall=config.EMBED_DIM_SYSCALL,
-            embed_dim_process=config.EMBED_DIM_PROCESS,
-            embed_dim_direction=config.EMBED_DIM_DIRECTION,
-            embed_dim_arg_count=config.EMBED_DIM_ARG_COUNT,
-            use_arg_count_feature=config.USE_ARG_COUNT_FEATURE,
-            hidden_dim=config.HIDDEN_DIM,
-            num_layers=config.NUM_LAYERS,
-            dropout=config.DROPOUT,
+            embed_dim_syscall=args.embed_dim_syscall,
+            embed_dim_process=args.embed_dim_process,
+            embed_dim_direction=args.embed_dim_direction,
+            embed_dim_arg_count=args.embed_dim_arg_count,
+            use_arg_count_feature=args.use_arg_count_feature,
+            hidden_dim=args.hidden_dim,
+            num_layers=args.num_layers,
+            dropout=args.dropout,
         )
 
     @classmethod
@@ -48,10 +47,10 @@ class CheckpointArchitectureMismatch(RuntimeError):
 
 
 class SyscallLSTM(nn.Module):
-    def __init__(self, vocab_sizes: dict[str, int], hparams: ModelHParams | None = None) -> None:
+    def __init__(self, vocab_sizes: dict[str, int], hparams: ModelHParams) -> None:
         super().__init__()
 
-        self.hparams = hparams if hparams is not None else ModelHParams.from_config()
+        self.hparams = hparams
 
         self.feature_order = list(FEATURE_NAMES)  # ["syscall", "process", "direction"]
         if self.hparams.use_arg_count_feature:

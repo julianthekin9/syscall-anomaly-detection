@@ -1,11 +1,13 @@
-# Основний конфіг експерименту. Читається syscall_hids/config.py при імпорті.
-# Кожен ключ обов'язковий; невідомий ключ (наприклад, з одруківкою) дає помилку.
-# Константи формату трас (індекси колонок, імена підтек, розширення) — у config.py.
-# Числа з порядком пишіть з крапкою (1.0e-4): PyYAML читає "1e-4" як рядок.
+# Експеримент: LID-DS 2021, сценарій PHP_CWE-434 (сконвертований experiments/lid_ds/convert.py).
+#   hids-train --config configs/php_cwe_434.yaml
+#   hids-train --config configs/php_cwe_434.yaml --lr 5e-4 --max_num_epochs 20   # CLI сильніший за YAML
+# Ключі = імена аргументів hids-train (hids-train --help); невідомий ключ дає помилку.
+# Шляхи до моделей, словників і графіків не задані: виводяться з --work_dir (за замовчуванням ".").
+# Для hids-eval / hids-detect той самий файл підходить: зайві для них ключі ігноруються.
 
 # --- Дані ---
 dataset_root: ./DATASET_LIDDS
-services: [PHP_CWE-434]  # null — усі сценарії з dataset_root
+services: [PHP_CWE-434]
 
 # --- Ознаки ---
 use_arg_count_feature: true
@@ -27,12 +29,12 @@ seq_step: 32  # шаг окна при обучении/калибровке (< 
 
 # --- Навчання ---
 batch_size: 32
-learning_rate: 1.0e-4
-epochs: 100
-resume: false
+lr: 1.0e-4
+max_num_epochs: 100
+restart_latest: false  # донавчати з {model_dir}/<сервіс>.pt
 
 # --- Скоринг і поріг ---
-window_agg: quantile         # quantile | max
+window_agg: quantile         # quantile | max | mean
 window_agg_quantile: 0.90    # используется только если window_agg=quantile
 threshold_percentile: 99.0
 
@@ -40,12 +42,6 @@ threshold_percentile: 99.0
 eval_test_every_epoch: true
 metrics_eval_every_n_epochs: 1
 train_metrics_max_batches: null  # null — метрики train по всіх батчах
-
-# --- Директорії ---
-model_dir: ./models  # <сервис>.pt на каждый сервис — чекпоинт включает веса, словари, порог, гиперпараметры
-checkpoint_dir: ./models/checkpoints  # поепохові чекпоінти <сервіс>/<сервіс>_epoch_NNN.pt
-vocab_dir: ./vocabs
-plots_dir: ./training_plots  # <сервис>_epochs.png — график loss/precision по эпохам, см. visualization.py
 
 # --- RAM ---
 ram_guard_enabled: true

@@ -3,30 +3,29 @@ from pathlib import Path
 
 import numpy as np
 
-from syscall_hids import config
 from syscall_hids.data.layout import recording_files
 from syscall_hids.data.parsing import read_recording
 
 PAD = "<PAD>"
 UNK = "<UNK>"
-FEATURE_NAMES = ["syscall", "process", "direction"]  # + "arg_count", если config.USE_ARG_COUNT_FEATURE
+FEATURE_NAMES = ["syscall", "process", "direction"]  # + "arg_count", если use_arg_count_feature
 
 
-def vocab_path(service_name: str) -> Path:
-    """Путь к закэшированному словарю сервиса (config.VOCAB_DIR/<сервис>.json)."""
-    return Path(config.VOCAB_DIR) / f"{service_name}.json"
+def vocab_path(service_name: str, vocab_dir: str) -> Path:
+    """Путь к закэшированному словарю сервиса (vocab_dir/<сервис>.json)."""
+    return Path(vocab_dir) / f"{service_name}.json"
 
 
-def save_vocab(service_name: str, vocabs: dict[str, dict[str, int]]) -> None:
-    path = vocab_path(service_name)
+def save_vocab(service_name: str, vocabs: dict[str, dict[str, int]], vocab_dir: str) -> None:
+    path = vocab_path(service_name, vocab_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(vocabs, f, ensure_ascii=False, indent=2)
 
 
-def load_vocab(service_name: str) -> dict[str, dict[str, int]] | None:
+def load_vocab(service_name: str, vocab_dir: str) -> dict[str, dict[str, int]] | None:
     """Читает закэшированный словарь с диска. None, если кэша ещё нет."""
-    path = vocab_path(service_name)
+    path = vocab_path(service_name, vocab_dir)
     if not path.exists():
         return None
     with open(path, encoding="utf-8") as f:
@@ -46,16 +45,18 @@ def _check_vocab_fits_dtype(vocabs: dict[str, dict[str, int]]) -> None:
         )
 
 
-def build_vocab(service_name: str, use_cache: bool = True) -> dict[str, dict[str, int]]:
+def build_vocab(
+    service_name: str, dataset_root: str, vocab_dir: str, use_cache: bool = True
+) -> dict[str, dict[str, int]]:
 
     if use_cache:
-        cached = load_vocab(service_name)
+        cached = load_vocab(service_name, vocab_dir)
         if cached is not None:
             _check_vocab_fits_dtype(cached)
             return cached
 
     raw_values: dict[str, set] = {name: set() for name in FEATURE_NAMES}
-    for rec_path in recording_files(service_name, "train"):
+    for rec_path in recording_files(service_name, "train", dataset_root):
         for line in read_recording(str(rec_path)):
             raw_values["syscall"].add(line.syscall)
             raw_values["process"].add(line.process_name)
@@ -69,5 +70,5 @@ def build_vocab(service_name: str, use_cache: bool = True) -> dict[str, dict[str
         vocabs[name] = vocab
 
     _check_vocab_fits_dtype(vocabs)
-    save_vocab(service_name, vocabs)
+    save_vocab(service_name, vocabs, vocab_dir)
     return vocabs
