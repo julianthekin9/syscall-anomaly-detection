@@ -15,9 +15,10 @@
 - `syscall_hids/tools/arg_parser.py`: парсеры (`build_default_arg_parser` для обучения, отдельные для `hids-eval` / `hids-detect`, которые игнорируют лишние ключи YAML). `arg_parser_tools.py`: `check_args` (пути из `--work_dir`, проверки диапазонов), `save_config_yaml`.
 - `syscall_hids/data/`: `format.py` (константы формата строки трассы), `parsing.py` (`ParsedLine`, `read_recording`), `layout.py` (раскладка и имена подпапок сплитов, `list_services`), `vocab.py` (словари), `sequences.py` (`encode_*`, `make_sequences`, `build_normal_sequences` / `build_test_sequences`), `datasets.py` (`SequenceDataset`, `TestSequenceDataset`).
 - `syscall_hids/modules/`: `models.py` (`SyscallLSTM`, `ModelHParams`, `ARCHITECTURE_VERSION`), `scoring.py` (NLL на шаг, агрегация окна).
-- `syscall_hids/tools/`: `train.py` (`train_one_service`, чекпоинты), `evaluation.py` (метрики, калибровка порога, `quick_test_evaluation`), `checkpoint.py` (`load_model`, `checkpoint_features`), `visualization.py`, `resource_guard.py` (`configure` — единственное модульное состояние).
+- `syscall_hids/tools/`: `train.py` (`train_one_service`, чекпоинты), `evaluation.py` (метрики, калибровка порога, `quick_test_evaluation`), `checkpoint.py` (`load_model`, `checkpoint_features`), `visualization.py` (в т.ч. `plot_from_results` — кривые из JSONL), `resource_guard.py` (`configure` — единственное модульное состояние), `utils.py` (`setup_logger`, `MetricsLogger`, `set_seeds`, `get_git_commit`).
 - `syscall_hids/collectors/`: `ebpf.py` (`EbpfSession`, `Collector`, `RealTimeCollector`), `sudo.py`.
-- `syscall_hids/cli/`: точки входа `run_train.py` (`hids-train`), `eval_recordings.py` (`hids-eval`), `detect_live.py` (`hids-detect`, живая детекция поверх eBPF).
+- `syscall_hids/cli/`: точки входа `run_train.py` (`hids-train`), `eval_recordings.py` (`hids-eval`), `detect_live.py` (`hids-detect`, живая детекция поверх eBPF), `plot_train.py` (`hids-plot-train`).
+- Логи и метрики `hids-train` (как в mace): на пути обучения только корневой `logging`, без `print`. `{log_dir}/{name}_run-{seed}.log` (уровень `--log_level`) и `..._debug.log` (всё, включая `Configuration:` и git-коммит); `{results_dir}/{name}_{сервис}_run-{seed}_train.txt` — JSONL с записями `opt` (каждый шаг), `eval`, `test`, `threshold`, `ram`. По умолчанию `log_dir={work_dir}/logs`, `results_dir={work_dir}/results`; при `--restart_latest true` файлы дописываются. `hids-eval` и `hids-detect` выводят в консоль.
 - `tests/`: регрессия инференса и мини-обучения против кода до переезда (`tests/golden/`, подробности в `tests/README.md`), тесты разбора аргументов и `hids-eval`.
 - `experiments/lid_ds/convert.py`: самостоятельный конвертер LID-DS 2021 в нативный формат (stdlib, без импорта проекта). Логику, специфичную для LID-DS, держать только там. Подробности в `experiments/lid_ds/README.MD`.
 
@@ -55,5 +56,6 @@
 - Все параметры и умолчания: `hids-train --help`
 - Повтор запуска: `hids-train --config {model_dir}/<сценарий>_config.yaml` (итоговая конфигурация пишется рядом с моделью и в чекпоинт, ключ `train_args`)
 - Оффлайн-оценка: `hids-eval --config configs/php_cwe_434.yaml --service <сценарий> --log <файл.sc>` или `--eval-test-split`
+- Кривые обучения из файла метрик: `hids-plot-train --results results/hids_<сценарий>_run-123_train.txt [--out curves.png]`
 - Realtime (root): `sudo hids-detect --service <сценарий> --container <контейнер>`
 - Тесты: `pytest tests/`

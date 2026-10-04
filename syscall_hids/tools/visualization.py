@@ -1,3 +1,5 @@
+import json
+import logging
 import os
 from pathlib import Path
 
@@ -9,11 +11,41 @@ import numpy as np
 
 
 def plot_training_curves(service_name: str, history: dict[str, list[float]], plots_dir: str) -> str | None:
-    epochs = history.get("epoch", [])
-    if not epochs:
-        print(f"[{service_name}] history порожня — графік не будую")
+    if not history.get("epoch", []):
+        logging.warning(f"[{service_name}] history порожня — графік не будую")
         return None
 
+    os.makedirs(plots_dir, exist_ok=True)
+    out_path = os.path.join(plots_dir, f"{service_name}_epochs.png")
+    _draw_training_curves(history, out_path)
+    return out_path
+
+
+def plot_from_results(results_path: str, out_path: str) -> str | None:
+    """Ті самі криві, що й plot_training_curves, але з файлу метрик JSONL (записи mode="eval")."""
+    by_epoch: dict[int, dict[str, float]] = {}
+    with open(results_path, encoding="utf-8") as f:
+        for line in f:
+            record = json.loads(line)
+            if record.get("mode") == "eval":
+                metrics = by_epoch.setdefault(record["epoch"], {})
+                metrics[f"{record['split']}_loss_syscall"] = record["loss"]
+                metrics[f"{record['split']}_precision_syscall"] = record["precision"]
+    epochs = sorted(by_epoch)
+    if not epochs:
+        logging.warning(f"{results_path}: немає записів eval — графік не будую")
+        return None
+
+    history: dict[str, list[float]] = {"epoch": epochs}
+    for key in ("train_loss_syscall", "val_loss_syscall", "train_precision_syscall", "val_precision_syscall"):
+        history[key] = [by_epoch[e][key] for e in epochs]
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    _draw_training_curves(history, out_path)
+    return out_path
+
+
+def _draw_training_curves(history: dict[str, list[float]], out_path: str) -> None:
+    epochs = history["epoch"]
     fig, axes = plt.subplots(2, 1, figsize=(6, 8), squeeze=False)
 
     def _plot(ax, train_key: str, val_key: str, title: str, ylim01: bool = False) -> None:
@@ -31,12 +63,8 @@ def plot_training_curves(service_name: str, history: dict[str, list[float]], plo
 
     fig.suptitle("Метрики по епохах")
     fig.tight_layout()
-
-    os.makedirs(plots_dir, exist_ok=True)
-    out_path = os.path.join(plots_dir, f"{service_name}_epochs.png")
     fig.savefig(out_path, dpi=120)
     plt.close(fig)
-    return out_path
 
 def plot_file_timeline(
     filename: str,
@@ -101,5 +129,5 @@ def plot_roc_curve(
     for tag in tags:
         path = os.path.join(plots_dir, f"{service_name}_roc_{tag}.png")
         plt.savefig(path, dpi=150)
-        print(f"[{service_name}] ROC-криву збережено у {path}")
+        logging.debug(f"[{service_name}] ROC-криву збережено у {path}")
     plt.close()

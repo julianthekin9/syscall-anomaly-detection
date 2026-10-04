@@ -44,6 +44,11 @@ EXPECTED_DEFAULTS = {
     "ram_hard_limit_percent": 92.0,
     "ram_throttle_sleep_sec": 2.0,
     "ram_check_every_n_recordings": 20,
+    "name": "hids",
+    "seed": 123,
+    "log_level": "INFO",
+    "log_dir": None,
+    "results_dir": None,
 }
 
 
@@ -95,6 +100,8 @@ def test_check_args_derives_paths_from_work_dir() -> None:
     assert args.checkpoints_dir == os.path.join("runs/x", "models", "checkpoints")
     assert args.plots_dir == os.path.join("runs/x", "training_plots")
     assert args.vocab_dir == os.path.join("runs/x", "vocabs")
+    assert args.log_dir == os.path.join("runs/x", "logs")
+    assert args.results_dir == os.path.join("runs/x", "results")
 
 
 def test_check_args_rejects_bad_seq_step() -> None:

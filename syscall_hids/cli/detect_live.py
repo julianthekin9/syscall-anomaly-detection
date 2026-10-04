@@ -53,7 +53,7 @@ def score_window(model, rows: list[list[int]], device: torch.device) -> float:
 def main() -> None:
     parser = build_detect_arg_parser(description=__doc__)
     args, input_log_messages = check_args(parser.parse_args())
-    for message in input_log_messages:
+    for message, _ in input_log_messages:
         print(f"УВАГА: {message}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

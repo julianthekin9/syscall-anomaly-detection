@@ -5,6 +5,8 @@ Usage:
     hids-eval --config configs/php_cwe_434.yaml --service PHP_CWE-434 --eval-test-split
 """
 
+import logging
+
 import torch
 from torch.utils.data import DataLoader
 
@@ -67,6 +69,8 @@ def print_log_verdict(scores: list[float], threshold: float) -> None:
 
 
 def main() -> None:
+    # quick_test_evaluation і plot_roc_curve пишуть через logging: виводимо в консоль як раніше
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = build_eval_arg_parser(description=__doc__)
     args = parser.parse_args()
 
@@ -74,7 +78,7 @@ def main() -> None:
         parser.error("Укажите --log <файл> или --eval-test-split")
 
     args, input_log_messages = check_args(args)
-    for message in input_log_messages:
+    for message, _ in input_log_messages:
         print(f"УВАГА: {message}")
     resource_guard.configure(
         args.ram_guard_enabled, args.ram_soft_limit_percent, args.ram_hard_limit_percent, args.ram_throttle_sleep_sec

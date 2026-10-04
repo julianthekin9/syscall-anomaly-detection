@@ -124,6 +124,14 @@ def build_default_arg_parser() -> configargparse.ArgumentParser:
 
     _add_dir_args(parser, model_dir=True, plots_dir=True, vocab_dir=True, checkpoints_dir=True)
     _add_ram_args(parser)
+
+    group = parser.add_argument_group("Логування")
+    group.add_argument("--name", type=str, default="hids", help="Ім'я експерименту, входить у tag файлів логу й метрик")
+    group.add_argument("--seed", type=int, default=123, help="Seed для random, numpy і torch")
+    group.add_argument("--log_level", type=str, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                       help="Рівень логу в консолі та {tag}.log ({tag}_debug.log пише все)")
+    group.add_argument("--log_dir", type=str, default=None, help="Тека логів (None -> {work_dir}/logs)")
+    group.add_argument("--results_dir", type=str, default=None, help="Тека файлів метрик JSONL (None -> {work_dir}/results)")
     return parser
 
 

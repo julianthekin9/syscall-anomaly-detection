@@ -1,4 +1,5 @@
 import gc
+import logging
 import os
 import time
 
@@ -49,7 +50,7 @@ def check_ram(context: str = "") -> None:
         )
 
     if pct >= _soft_limit_percent:
-        print(
+        logging.warning(
             f"[resource_guard] ВНИМАНИЕ: RAM {pct:.1f}% "
             f"(мягкий лимит {_soft_limit_percent}%), "
             f"RSS процесса={process_rss_gb():.2f} GB, контекст: {context or '?'} — "
