@@ -15,13 +15,10 @@ import torch
 from syscall_hids.collectors.ebpf import EbpfSession, RealTimeCollector
 from syscall_hids.data.parsing import ParsedLine
 from syscall_hids.data.sequences import encode_line
+from syscall_hids.modules.models import SyscallLSTM
 from syscall_hids.modules.scoring import compute_step_scores, aggregate_window_scores
 from syscall_hids.tools.checkpoint import load_model
 from syscall_hids.tools.visualization import plot_file_timeline
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -68,7 +65,6 @@ def main() -> None:
 
     if args.checkpoint:
         checkpoint = torch.load(args.checkpoint, map_location=device)
-        from model import SyscallLSTM
         model = SyscallLSTM.from_checkpoint(checkpoint, device)
         model.eval()
     else:
