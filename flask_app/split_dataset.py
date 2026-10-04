@@ -1,28 +1,22 @@
 """
-Розбиває один великий файл датасету на train/val за заданим співвідношенням.
+Розбиває один великий файл трасу на train/val за часом: перші train_ratio рядків
+ідуть у train, решта у val. Рядки не перемішуються: для трас syscall'ів порядок
+є самими даними, перемішування його руйнує.
 
-Працює побудрядково — кожен рядок вхідного файлу вважається окремим записом
-(підходить для CSV, JSONL або текстових логів syscall-трейсів з одним записом
-на рядок). Заголовок (header), якщо є, автоматично копіюється в обидва файли.
+Працює потоково у два проходи, файл цілком у пам'ять не читається:
+перший прохід рахує рядки, другий пише їх у train/val. Байти рядків
+копіюються без змін. Заголовок (header), якщо є, копіюється в обидва файли.
 
 Приклади використання:
-    # 90% train / 10% val, випадковий (shuffled) розподіл
-    python split_dataset.py --input dataset.csv --train-ratio 0.9
+    # 90% train / 10% val
+    python flask_app/split_dataset.py --input normal.sc --train-ratio 0.9
 
-    # без перемішування (зберегти хронологічний порядок) — перші N% у train,
-    # решта у val; корисно для syscall-трейсів, де порядок важливий
-    python split_dataset.py --input dataset.csv --train-ratio 0.9 --no-shuffle
-
-    # з заголовком CSV (перший рядок скопіюється в train і val)
-    python split_dataset.py --input dataset.csv --train-ratio 0.8 --header
-
-    # власні шляхи для виводу та seed для відтворюваності
-    python split_dataset.py --input dataset.csv --train-ratio 0.85 \
-        --train-out train.csv --val-out val.csv --seed 42
+    # власні шляхи для виводу
+    python flask_app/split_dataset.py --input normal.sc --train-ratio 0.8 \
+        --train-out training/train.sc --val-out validation/validation.sc
 """
 
 import argparse
-import random
 import sys
 from pathlib import Path
 
@@ -42,11 +36,6 @@ def parse_args() -> argparse.Namespace:
         "--header", action="store_true",
         help="Перший рядок вхідного файлу — заголовок; буде скопійований в обидва вихідні файли",
     )
-    parser.add_argument(
-        "--no-shuffle", action="store_true",
-        help="Не перемішувати рядки — зберегти порядок (перші N%% у train, решта у val)",
-    )
-    parser.add_argument("--seed", type=int, default=42, help="Seed для генератора випадкових чисел (за замовчуванням 42)")
     return parser.parse_args()
 
 
@@ -63,45 +52,34 @@ def main() -> None:
     train_path = Path(args.train_out) if args.train_out else input_path.with_suffix(input_path.suffix + ".train")
     val_path = Path(args.val_out) if args.val_out else input_path.with_suffix(input_path.suffix + ".val")
 
-    with input_path.open("r", encoding="utf-8") as f:
-        lines = f.readlines()
+    # Прохід 1: кількість рядків даних (без заголовка)
+    with input_path.open("rb") as f:
+        n_lines = sum(1 for _ in f) - (1 if args.header else 0)
 
-    header_line = None
-    if args.header:
-        if not lines:
-            sys.exit("Вхідний файл порожній, але вказано --header")
-        header_line = lines[0]
-        lines = lines[1:]
-
-    if not lines:
+    if args.header and n_lines < 0:
+        sys.exit("Вхідний файл порожній, але вказано --header")
+    if n_lines <= 0:
         sys.exit("У вхідному файлі немає рядків даних для розбиття")
 
-    if not args.no_shuffle:
-        rng = random.Random(args.seed)
-        rng.shuffle(lines)
-
-    split_idx = round(len(lines) * args.train_ratio)
+    split_idx = round(n_lines * args.train_ratio)
     # гарантуємо, що обидві вибірки непорожні, якщо у файлі є хоча б 2 рядки
-    split_idx = max(1, min(split_idx, len(lines) - 1)) if len(lines) > 1 else split_idx
+    split_idx = max(1, min(split_idx, n_lines - 1)) if n_lines > 1 else split_idx
 
-    train_lines = lines[:split_idx]
-    val_lines = lines[split_idx:]
+    # Прохід 2: перші split_idx рядків у train, решта у val
+    for path in (train_path, val_path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+    with input_path.open("rb") as src, train_path.open("wb") as train_f, val_path.open("wb") as val_f:
+        if args.header:
+            header_line = src.readline()
+            train_f.write(header_line)
+            val_f.write(header_line)
+        for i, line in enumerate(src):
+            (train_f if i < split_idx else val_f).write(line)
 
-    with train_path.open("w", encoding="utf-8") as f:
-        if header_line is not None:
-            f.write(header_line)
-        f.writelines(train_lines)
-
-    with val_path.open("w", encoding="utf-8") as f:
-        if header_line is not None:
-            f.write(header_line)
-        f.writelines(val_lines)
-
-    total = len(train_lines) + len(val_lines)
-    print(f"Всього рядків даних: {total}")
-    print(f"Train: {len(train_lines)} рядків ({len(train_lines) / total:.1%}) -> {train_path}")
-    print(f"Val:   {len(val_lines)} рядків ({len(val_lines) / total:.1%}) -> {val_path}")
-    print(f"Перемішування: {'вимкнено' if args.no_shuffle else f'увімкнено (seed={args.seed})'}")
+    n_val = n_lines - split_idx
+    print(f"Всього рядків даних: {n_lines}")
+    print(f"Train: {split_idx} рядків ({split_idx / n_lines:.1%}) -> {train_path}")
+    print(f"Val:   {n_val} рядків ({n_val / n_lines:.1%}) -> {val_path}")
 
 
 if __name__ == "__main__":
