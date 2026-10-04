@@ -108,3 +108,22 @@ temp/
 *.res
 *.pcap
 *.png
+*.pt
+*.csv
+
+# ============================================================
+# Datasets and run outputs (stay on disk, not in git)
+# ============================================================
+
+outputs/
+models/
+vocabs/
+training_plots/
+probe_plots/
+realtime_runs/
+DATASET/
+LID-DS_DATASET/
+REAL/
+data_cve-2019-5418/
+__MACOSX/
+ApachePHP_training.txt
