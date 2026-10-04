@@ -21,6 +21,9 @@ testbed = [
     "flask",
     "requests",
 ]
+dev = [
+    "pytest",
+]
 
 [project.scripts]
 hids-train = "syscall_hids.cli.run_train:main"

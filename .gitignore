@@ -128,3 +128,7 @@ REAL/
 data_cve-2019-5418/
 __MACOSX/
 ApachePHP_training.txt
+
+# Фікстури регресійного тесту (інакше їх сховають *.sc, *.pt, *.json)
+!tests/golden/
+!tests/golden/**
