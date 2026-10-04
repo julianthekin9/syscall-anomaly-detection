@@ -49,6 +49,8 @@ def score_window(model, rows: list[list[int]], device: torch.device) -> float:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--service", default="FLASK", help="Имя сервиса: модель config.MODEL_DIR/<service>.pt и префикс файлов прогона")
+    parser.add_argument("--container", default="flask-app", help="Docker-контейнер, syscall'ы которого отслеживаются")
     parser.add_argument("--checkpoint", default=None, help="Явный путь к .pt (по умолчанию — config.MODEL_DIR/<service>.pt)")
     parser.add_argument("--scan-interval", type=float, default=1.0, help="Пауза между проверками окна, сек")
     parser.add_argument("--duration", type=float, default=0.0, help="Остановиться через N секунд (0 = до Ctrl+C)")
@@ -58,9 +60,6 @@ def main() -> None:
                               "(рисуется вертикальной линией на итоговом графике, как в probe_eval)")
     args = parser.parse_args()
 
-    CONTAINER = 'flask-app'
-    SERVICE = 'FLASK'
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if args.checkpoint:
@@ -68,7 +67,7 @@ def main() -> None:
         model = SyscallLSTM.from_checkpoint(checkpoint, device)
         model.eval()
     else:
-        model, checkpoint = load_model(SERVICE, device)
+        model, checkpoint = load_model(args.service, device)
 
     vocabs = checkpoint["vocabs"]
     seq_len = checkpoint["seq_len"]
@@ -77,9 +76,9 @@ def main() -> None:
     threshold = checkpoint["threshold"]
     needed = seq_len + 1
 
-    print(f"[{SERVICE}] device={device} seq_len={seq_len} window_agg={window_agg} threshold={threshold:.4f}")
+    print(f"[{args.service}] device={device} seq_len={seq_len} window_agg={window_agg} threshold={threshold:.4f}")
 
-    session = EbpfSession(container=CONTAINER)
+    session = EbpfSession(container=args.container)
     collector = RealTimeCollector(session.syscall_table, buffer_size=max(needed * 20, 4096))
     session.attach_collector(collector)
 
@@ -131,7 +130,7 @@ def main() -> None:
         print("Недостатньо подій для повного вікна.")
         return
 
-    csv_path = out_dir / f"{SERVICE}_{run_id}_scores.csv"
+    csv_path = out_dir / f"{args.service}_{run_id}_scores.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["timestamp_unix", "nll", "alert"])
@@ -142,9 +141,9 @@ def main() -> None:
     window_end_ts = np.array(history_ts, dtype=np.float64)
     scores = np.array(history_scores, dtype=np.float64)
     attack_start_sec = (window_end_ts[0] + args.attack_marker) if args.attack_marker is not None else None
-    plot_path = out_dir / f"{SERVICE}_{run_id}_nll_timeline.png"
+    plot_path = out_dir / f"{args.service}_{run_id}_nll_timeline.png"
     plot_file_timeline(
-        f"{SERVICE} realtime ({run_id})", window_end_ts, scores, attack_start_sec, threshold, plot_path
+        f"{args.service} realtime ({run_id})", window_end_ts, scores, attack_start_sec, threshold, plot_path
     )
     print(f"Графік збережено: {plot_path}")
 
