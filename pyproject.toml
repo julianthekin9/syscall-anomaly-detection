@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "syscall-hids"
+dynamic = ["version"]
+description = "Host-based IDS: LSTM anomaly detection on Linux system call traces"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "numpy",
+    "scikit-learn",
+    "matplotlib",
+    "psutil",
+]
+
+[project.optional-dependencies]
+testbed = [
+    "flask",
+    "requests",
+]
+
+[project.scripts]
+hids-train = "syscall_hids.cli.run_train:main"
+hids-eval = "syscall_hids.cli.eval_recordings:main"
+hids-detect = "syscall_hids.cli.detect_live:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "syscall_hids.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["syscall_hids*"]

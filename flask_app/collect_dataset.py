@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from scenarios import TrafficRunner, normal, abnormal_command_execution, abnormal_network, abnormal_process_info
-from utils.ebpf import EbpfSession
-from utils.sudo import get_real_uid_gid, chown_recursive
+from syscall_hids.collectors.ebpf import EbpfSession
+from syscall_hids.collectors.sudo import get_real_uid_gid, chown_recursive
 
 CONTAINER = 'flask-app'
 

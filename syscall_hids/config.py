@@ -7,10 +7,6 @@ DATASET_ROOT = "./LID-DS_DATASET/CVE-2020-9484-NEW"
 
 SERVICES: list[str] | None = ["CVE-2020-9484"]
 
-# "generic" — власний формат (data.py), "lid_ds" — датасет LID-DS 2021 (lid_ds_data.py)
-DatasetFormat = Literal["generic", "lid_ds"]
-DATASET_FORMAT: DatasetFormat = "lid_ds"
-
 TRAIN_SUBDIR = "training"
 VAL_SUBDIR = "validation"
 TEST_SUBDIR = "test"
@@ -19,10 +15,6 @@ TEST_NORMAL_SUBDIR = "normal"
 TEST_ABNORMAL_SUBDIR = "abnormal"
 
 RECORDING_EXTENSION = ".sc"
-
-# LID-DS: вікно test-спліту вважається атакуючим, якщо частка його цільових кроків
-# з часом >= початку атаки (з json запису) не менша за це значення
-LID_DS_ATTACK_MIN_FRACTION = 0.5
 
 TIME_COLUMN_INDEX = 0
 PROCESS_NAME_COLUMN_INDEX = 1

@@ -4,7 +4,7 @@ import time
 
 import psutil
 
-import config
+from syscall_hids import config
 
 _process = psutil.Process(os.getpid())
 

@@ -1,36 +1,22 @@
 """
 Usage:
-    python predict.py --service FLASK --log путь/к/логу.sc
-    python predict.py --service FLASK --eval-test-split
+    hids-eval --service FLASK --log путь/к/логу.sc
+    hids-eval --service FLASK --eval-test-split
 """
 
 import argparse
-import os
 
 import torch
 from torch.utils.data import DataLoader
 
-import config
-if config.DATASET_FORMAT == "lid_ds":
-    from lid_ds_data import build_test_sequences, read_recording
-    from data import encode_recording, make_sequences
-else:
-    from data import build_test_sequences, encode_recording, make_sequences, read_recording
-from dataset import TestSequenceDataset, SequenceDataset
-from model import SyscallLSTM, aggregate_window_scores, compute_step_scores
-from train import quick_test_evaluation
-
-
-def load_model(service_name: str, device: torch.device) -> tuple[SyscallLSTM, dict]:
-    path = os.path.join(config.MODEL_DIR, f"{service_name}.pt")
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Checkpoint {path} not found — train the model first: python train.py --service {service_name}")
-
-    checkpoint = torch.load(path, map_location=device)
-    model = SyscallLSTM.from_checkpoint(checkpoint, device)
-    model.eval()
-    return model, checkpoint
-
+from syscall_hids import config
+from syscall_hids.data.datasets import SequenceDataset, TestSequenceDataset
+from syscall_hids.data.parsing import read_recording
+from syscall_hids.data.sequences import build_test_sequences, encode_recording, make_sequences
+from syscall_hids.modules.models import SyscallLSTM
+from syscall_hids.modules.scoring import aggregate_window_scores, compute_step_scores
+from syscall_hids.tools.checkpoint import load_model
+from syscall_hids.tools.evaluation import quick_test_evaluation
 
 def score_log_file(model: SyscallLSTM, checkpoint: dict, log_path: str, device: torch.device) -> list[float]:
     vocabs = checkpoint["vocabs"]

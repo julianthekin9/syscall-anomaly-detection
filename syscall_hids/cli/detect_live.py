@@ -1,7 +1,7 @@
 """
 Usage:
-    sudo python realtime_detect.py --service FLASK --container flask-app
-    sudo python realtime_detect.py --service FLASK --container flask-app --duration 120 --scan-interval 0.5
+    sudo hids-detect --service FLASK --container flask-app
+    sudo hids-detect --service FLASK --container flask-app --duration 120 --scan-interval 0.5
 """
 
 import argparse
@@ -12,11 +12,12 @@ from pathlib import Path
 
 import torch
 
-from data import ParsedLine, encode_line
-from utils.ebpf import EbpfSession, RealTimeCollector
-from model import compute_step_scores, aggregate_window_scores
-from predict import load_model
-from visualization import plot_file_timeline
+from syscall_hids.collectors.ebpf import EbpfSession, RealTimeCollector
+from syscall_hids.data.parsing import ParsedLine
+from syscall_hids.data.sequences import encode_line
+from syscall_hids.modules.scoring import compute_step_scores, aggregate_window_scores
+from syscall_hids.tools.checkpoint import load_model
+from syscall_hids.tools.visualization import plot_file_timeline
 import matplotlib
 
 matplotlib.use("Agg")

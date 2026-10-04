@@ -7,7 +7,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-import config
+from syscall_hids import config
 
 
 def plot_training_curves(service_name: str, history: dict[str, list[float]]) -> str | None:
