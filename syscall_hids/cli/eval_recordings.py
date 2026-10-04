@@ -91,7 +91,7 @@ def main() -> None:
             return
         test_loader = DataLoader(TestSequenceDataset(X_test, y_test, window_is_attack), batch_size=config.BATCH_SIZE, shuffle=False)
         print(f"\nОценка на test-сплите сервиса {args.service} ({len(X_test)} окон):")
-        quick_test_evaluation(model, test_loader, threshold, device)
+        quick_test_evaluation(model, test_loader, threshold, device, args.service)
 
 
 if __name__ == "__main__":
