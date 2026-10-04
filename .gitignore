@@ -132,3 +132,6 @@ ApachePHP_training.txt
 # Фікстури регресійного тесту (інакше їх сховають *.sc, *.pt, *.json)
 !tests/golden/
 !tests/golden/**
+
+# Claude Code: спільні налаштування проєкту в git (інакше їх сховає *.json)
+!.claude/settings.json
