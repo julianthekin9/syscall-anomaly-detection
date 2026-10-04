@@ -24,7 +24,7 @@ python experiments/lid_ds/convert.py --rebalance DATASET_LIDDS/PHP_CWE-434
 
 Входы можно смешивать: архивы и теки. Тест в LID-DS 2021 лежит в `test/normal` и `test/normal_and_attack`, поэтому поиск записей рекурсивный. `__MACOSX` и `._*` пропускаются.
 
-Затем в `config.py` (или в YAML после этапа 3) указать `DATASET_ROOT = "./DATASET_LIDDS"`.
+Затем в `syscall_hids/config.yaml` указать `dataset_root: ./DATASET_LIDDS` и нужные `services`.
 
 ## Что делает
 

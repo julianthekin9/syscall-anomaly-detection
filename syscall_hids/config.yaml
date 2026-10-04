@@ -1,0 +1,55 @@
+# Основний конфіг експерименту. Читається syscall_hids/config.py при імпорті.
+# Кожен ключ обов'язковий; невідомий ключ (наприклад, з одруківкою) дає помилку.
+# Константи формату трас (індекси колонок, імена підтек, розширення) — у config.py.
+# Числа з порядком пишіть з крапкою (1.0e-4): PyYAML читає "1e-4" як рядок.
+
+# --- Дані ---
+dataset_root: ./LID-DS_DATASET/CVE-2020-9484-NEW
+services: [CVE-2020-9484]  # null — усі сценарії з dataset_root
+
+# --- Ознаки ---
+use_arg_count_feature: true
+arg_count_buckets: 8  # 0,1,2,...,6, "7+" — clip(arg_count, 0, arg_count_buckets-1)
+force_rebuild_vocab: false
+
+# --- Модель ---
+embed_dim_syscall: 16
+embed_dim_process: 8
+embed_dim_direction: 2
+embed_dim_arg_count: 4  # используется только если use_arg_count_feature=true
+hidden_dim: 200
+num_layers: 2
+dropout: 0.2  # между слоями LSTM при num_layers > 1
+
+# --- Вікна ---
+seq_len: 64   # длина последовательности (шагов syscall) на один train-пример
+seq_step: 32  # шаг окна при обучении/калибровке (< seq_len => перекрытие)
+
+# --- Навчання ---
+batch_size: 32
+learning_rate: 1.0e-4
+epochs: 100
+resume: false
+
+# --- Скоринг і поріг ---
+window_agg: quantile         # quantile | max
+window_agg_quantile: 0.90    # используется только если window_agg=quantile
+threshold_percentile: 99.0
+
+# --- Оцінка ---
+eval_test_every_epoch: true
+metrics_eval_every_n_epochs: 1
+train_metrics_max_batches: null  # null — метрики train по всіх батчах
+
+# --- Директорії ---
+model_dir: ./models  # <сервис>.pt на каждый сервис — чекпоинт включает веса, словари, порог, гиперпараметры
+checkpoint_dir: ./models/checkpoints  # поепохові чекпоінти <сервіс>/<сервіс>_epoch_NNN.pt
+vocab_dir: ./vocabs
+plots_dir: ./training_plots  # <сервис>_epochs.png — график loss/precision по эпохам, см. visualization.py
+
+# --- RAM ---
+ram_guard_enabled: true
+ram_soft_limit_percent: 80.0  # выше -> gc.collect() + пауза + предупреждение, работа продолжается
+ram_hard_limit_percent: 92.0  # выше -> контролируемая остановка (RamLimitExceeded) вместо SIGKILL
+ram_throttle_sleep_sec: 2.0   # пауза после мягкого срабатывания
+ram_check_every_n_recordings: 20  # как часто проверять RAM при чтении train/val/test записей

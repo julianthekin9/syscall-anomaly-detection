@@ -1,12 +1,18 @@
+"""Конфіг пакета.
+
+Параметри експерименту читаються з config.yaml поруч із цим файлом і виставляються
+як атрибути модуля (config.SEQ_LEN тощо). Тут же, константами, лишається опис формату
+трас: це не налаштування експерименту, а контракт із eBPF-колектором і конвертером LID-DS.
+"""
+
+from pathlib import Path
 from typing import Literal
 
-CHECKPOINT_DIR = "./models/checkpoints" 
-MODEL_DIR = "./models" 
+import yaml
 
-DATASET_ROOT = "./LID-DS_DATASET/CVE-2020-9484-NEW"
+CONFIG_PATH = Path(__file__).with_name("config.yaml")
 
-SERVICES: list[str] | None = ["CVE-2020-9484"]
-
+# --- Формат трас (не параметри експерименту) ---
 TRAIN_SUBDIR = "training"
 VAL_SUBDIR = "validation"
 TEST_SUBDIR = "test"
@@ -23,47 +29,54 @@ DIRECTION_COLUMN_INDEX = 3
 PARAMS_BEGIN_INDEX = 4  # всё после этого индекса — параметры syscall'а
 MIN_RAW_FIELDS = 4
 
-USE_ARG_COUNT_FEATURE = True
-ARG_COUNT_BUCKETS = 8  # 0,1,2,...,6, "7+" — clip(arg_count, 0, ARG_COUNT_BUCKETS-1)
+# --- Параметри експерименту з config.yaml ---
+with open(CONFIG_PATH, encoding="utf-8") as _f:
+    _cfg: dict = yaml.safe_load(_f)
 
-VOCAB_DIR = "./vocabs"
-FORCE_REBUILD_VOCAB = False
+# pop: відсутній ключ дає KeyError з його ім'ям, а залишок після розбору — невідомі ключі
+DATASET_ROOT: str = _cfg.pop("dataset_root")
+SERVICES: list[str] | None = _cfg.pop("services")
 
-EMBED_DIM_SYSCALL = 16
-EMBED_DIM_PROCESS = 8   
-EMBED_DIM_DIRECTION = 2
-EMBED_DIM_ARG_COUNT = 4  # используется только если USE_ARG_COUNT_FEATURE=True
+USE_ARG_COUNT_FEATURE: bool = _cfg.pop("use_arg_count_feature")
+ARG_COUNT_BUCKETS: int = _cfg.pop("arg_count_buckets")
+FORCE_REBUILD_VOCAB: bool = _cfg.pop("force_rebuild_vocab")
 
-HIDDEN_DIM = 200
-NUM_LAYERS = 2
-DROPOUT = 0.2  # между слоями LSTM при NUM_LAYERS > 1
+EMBED_DIM_SYSCALL: int = _cfg.pop("embed_dim_syscall")
+EMBED_DIM_PROCESS: int = _cfg.pop("embed_dim_process")
+EMBED_DIM_DIRECTION: int = _cfg.pop("embed_dim_direction")
+EMBED_DIM_ARG_COUNT: int = _cfg.pop("embed_dim_arg_count")
+HIDDEN_DIM: int = _cfg.pop("hidden_dim")
+NUM_LAYERS: int = _cfg.pop("num_layers")
+DROPOUT: float = _cfg.pop("dropout")
 
-SEQ_LEN = 64     # длина последовательности (шагов syscall) на один train-пример
-SEQ_STEP = 32    # шаг окна при обучении/калибровке (< SEQ_LEN => перекрытие)
+SEQ_LEN: int = _cfg.pop("seq_len")
+SEQ_STEP: int = _cfg.pop("seq_step")
 
-BATCH_SIZE = 32
-LEARNING_RATE = 1e-4
-EPOCHS = 100
-
-RESUME = False
+BATCH_SIZE: int = _cfg.pop("batch_size")
+LEARNING_RATE: float = _cfg.pop("learning_rate")
+EPOCHS: int = _cfg.pop("epochs")
+RESUME: bool = _cfg.pop("resume")
 
 WindowAgg = Literal["quantile", "max"]
-WINDOW_AGG: WindowAgg = "quantile"
-WINDOW_AGG_QUANTILE = 0.90  # используется только если WINDOW_AGG="quantile"
+WINDOW_AGG: WindowAgg = _cfg.pop("window_agg")
+WINDOW_AGG_QUANTILE: float = _cfg.pop("window_agg_quantile")
+THRESHOLD_PERCENTILE: float = _cfg.pop("threshold_percentile")
 
-THRESHOLD_PERCENTILE = 99.0
+EVAL_TEST_EVERY_EPOCH: bool = _cfg.pop("eval_test_every_epoch")
+METRICS_EVAL_EVERY_N_EPOCHS: int = _cfg.pop("metrics_eval_every_n_epochs")
+TRAIN_METRICS_MAX_BATCHES: int | None = _cfg.pop("train_metrics_max_batches")
 
-EVAL_TEST_EVERY_EPOCH = True
+MODEL_DIR: str = _cfg.pop("model_dir")
+CHECKPOINT_DIR: str = _cfg.pop("checkpoint_dir")
+VOCAB_DIR: str = _cfg.pop("vocab_dir")
+PLOTS_DIR: str = _cfg.pop("plots_dir")
 
-METRICS_EVAL_EVERY_N_EPOCHS = 1
+RAM_GUARD_ENABLED: bool = _cfg.pop("ram_guard_enabled")
+RAM_SOFT_LIMIT_PERCENT: float = _cfg.pop("ram_soft_limit_percent")
+RAM_HARD_LIMIT_PERCENT: float = _cfg.pop("ram_hard_limit_percent")
+RAM_THROTTLE_SLEEP_SEC: float = _cfg.pop("ram_throttle_sleep_sec")
+RAM_CHECK_EVERY_N_RECORDINGS: int = _cfg.pop("ram_check_every_n_recordings")
 
-TRAIN_METRICS_MAX_BATCHES: int | None = None
-
-MODEL_DIR = "./models"  # <сервис>.pt на каждый сервис — чекпоинт включает веса, словари, порог, гиперпараметры
-PLOTS_DIR = "./training_plots"  # <сервис>_epochs.png — график loss/precision по эпохам, см. visualization.py
-
-RAM_GUARD_ENABLED = True
-RAM_SOFT_LIMIT_PERCENT = 80.0   # выше -> gc.collect() + пауза + предупреждение, работа продолжается
-RAM_HARD_LIMIT_PERCENT = 92.0   # выше -> контролируемая остановка (RamLimitExceeded) вместо SIGKILL
-RAM_THROTTLE_SLEEP_SEC = 2.0    # пауза после мягкого срабатывания
-RAM_CHECK_EVERY_N_RECORDINGS = 20  # как часто проверять RAM при чтении train/val/test записей
+if _cfg:
+    raise ValueError(f"Невідомі ключі в {CONFIG_PATH}: {sorted(_cfg)}")
+del _cfg, _f

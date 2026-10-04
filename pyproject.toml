@@ -14,6 +14,7 @@ dependencies = [
     "scikit-learn",
     "matplotlib",
     "psutil",
+    "pyyaml",
 ]
 
 [project.optional-dependencies]
@@ -35,3 +36,6 @@ version = { attr = "syscall_hids.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["syscall_hids*"]
+
+[tool.setuptools.package-data]
+syscall_hids = ["config.yaml"]
