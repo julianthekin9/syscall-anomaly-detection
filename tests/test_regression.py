@@ -1,6 +1,10 @@
-"""Регресія: оконні скори та AUC поточного коду збігаються з кодом до переїзду в пакет.
+"""Регресія інференсу: оконні скори та AUC поточного коду збігаються з кодом до переїзду в пакет.
 
 Еталон (tests/golden/golden.json) згенеровано tests/golden/make_golden.py зі старого коду.
+Два випадки:
+- FLASK.pt: справжній старий чекпоінт завантажується і дає ті самі скори. Його словник
+  майже не покриває фікстури (процес завжди UNK), тож кодування він майже не перевіряє;
+- FIXT.pt: чекпоінт міні-навчання, словник якого збудовано на тих самих даних.
 """
 
 import json
@@ -15,26 +19,30 @@ from syscall_hids.modules.models import SyscallLSTM
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 TOL = 1e-6
+# випадок -> (чекпоінт, тека з normal/ і abnormal/, ключ еталону в golden.json; None — корінь)
+CASES = {
+    "FLASK": ("FLASK.pt", GOLDEN_DIR / "data", None),
+    "FIXT": ("FIXT.pt", GOLDEN_DIR / "data" / "FIXT" / "test", "fixt_inference"),
+}
 
 
-@pytest.fixture(scope="module")
-def golden() -> dict:
-    return json.loads((GOLDEN_DIR / "golden.json").read_text(encoding="utf-8"))
+@pytest.fixture(scope="module", params=list(CASES))
+def case(request) -> tuple[dict, dict[str, list[float]]]:
+    """(еталон із ключами auc/scores, поточні скори) для одного чекпоінта."""
+    ckpt_name, data_dir, key = CASES[request.param]
+    golden = json.loads((GOLDEN_DIR / "golden.json").read_text(encoding="utf-8"))
+    golden = golden if key is None else golden[key]
 
-
-@pytest.fixture(scope="module")
-def current_scores(golden: dict) -> dict[str, list[float]]:
     device = torch.device("cpu")
-    checkpoint = torch.load(GOLDEN_DIR / "FLASK.pt", map_location=device)
+    checkpoint = torch.load(GOLDEN_DIR / ckpt_name, map_location=device)
     model = SyscallLSTM.from_checkpoint(checkpoint, device)
     model.eval()
-    return {
-        name: score_log_file(model, checkpoint, str(GOLDEN_DIR / "data" / name), device)
-        for name in golden["scores"]
-    }
+    current = {name: score_log_file(model, checkpoint, str(data_dir / name), device) for name in golden["scores"]}
+    return golden, current
 
 
-def test_window_scores_match(golden: dict, current_scores: dict[str, list[float]]) -> None:
+def test_window_scores_match(case) -> None:
+    golden, current_scores = case
     for name, expected in golden["scores"].items():
         actual = current_scores[name]
         assert len(actual) == len(expected), f"{name}: кількість вікон {len(actual)} != {len(expected)}"
@@ -42,7 +50,8 @@ def test_window_scores_match(golden: dict, current_scores: dict[str, list[float]
         assert worst <= TOL, f"{name}: максимальне відхилення скору {worst:.3e} > {TOL}"
 
 
-def test_auc_matches(golden: dict, current_scores: dict[str, list[float]]) -> None:
+def test_auc_matches(case) -> None:
+    golden, current_scores = case
     truth: list[bool] = []
     flat: list[float] = []
     for name, scores in current_scores.items():

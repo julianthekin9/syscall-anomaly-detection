@@ -1,0 +1,1000 @@
+1631273894218470024 mysqld io_getevents <
+1631273894218470043 mysqld io_getevents <
+1631273894218472959 mysqld io_getevents >
+1631273894218472961 mysqld io_getevents >
+1631273894218510512 mysqld io_getevents <
+1631273894218512002 mysqld io_getevents >
+1631273894218515192 mysqld io_getevents <
+1631273894218516120 mysqld io_getevents >
+1631273894218519516 mysqld io_getevents <
+1631273894218519623 mysqld io_getevents <
+1631273894218521135 mysqld io_getevents >
+1631273894218521287 mysqld io_getevents >
+1631273894330259113 mysqld futex < res=-110(ETIMEDOUT) 
+1631273894330269540 mysqld futex > addr=7FEA61C68240 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273894330271295 mysqld futex < res=0 
+1631273894330276545 mysqld futex > addr=7FEA61C6827C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=3 
+1631273894451889306 mysqld futex < res=-110(ETIMEDOUT) 
+1631273894451898583 mysqld futex > addr=7FEA61C69C80 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273894451900628 mysqld futex < res=0 
+1631273894451908425 mysqld futex > addr=7FEA61C69CBC op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=3 
+1631273894452055194 mysqld futex < res=-110(ETIMEDOUT) 
+1631273894452061735 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273894452063694 mysqld futex < res=0 
+1631273894452068723 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=11 
+1631273894452084577 mysqld futex < res=-110(ETIMEDOUT) 
+1631273894452092343 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273894452094215 mysqld futex < res=0 
+1631273894452128985 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=11 
+1631273894456001996 mysqld select < res=0 
+1631273894456032972 mysqld io_submit >
+1631273894456099853 mysqld io_submit <
+1631273894456160108 mysqld io_getevents <
+1631273894456174749 mysqld fsync >
+1631273894456895632 mysqld sched_yield >
+1631273894456899944 mysqld sched_yield <
+1631273894456903634 mysqld futex > addr=7FEA61C6E814 op=128(FUTEX_PRIVATE_FLAG) val=5 
+1631273894458793042 mysqld fsync <
+1631273894458802202 mysqld futex > addr=7FEA61C6E814 op=132(FUTEX_PRIVATE_FLAG|FUTEX_CMP_REQUEUE) val=1 
+1631273894458813926 mysqld futex < res=1 
+1631273894458824482 mysqld io_getevents >
+1631273894458860423 mysqld futex < res=0 
+1631273894458865680 mysqld futex > addr=7FEA61C6E7D8 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273894458867481 mysqld futex < res=0 
+1631273894458872413 mysqld select >
+1631273894507180621 mysqld select < res=0 
+1631273894507205633 mysqld select >
+1631273894507316152 mysqld select < res=0 
+1631273894507327818 mysqld select >
+1631273894516648787 mysqld io_getevents <
+1631273894516659907 mysqld io_getevents >
+1631273894516714545 mysqld io_getevents <
+1631273894516721292 mysqld io_getevents >
+1631273894518750674 mysqld select < res=0 
+1631273894518759536 mysqld select >
+1631273894523275342 mysqld io_getevents <
+1631273894523286048 mysqld io_getevents >
+1631273894718781466 mysqld io_getevents <
+1631273894718781580 mysqld io_getevents <
+1631273894718781601 mysqld io_getevents <
+1631273894718781636 mysqld io_getevents <
+1631273894718781697 mysqld io_getevents <
+1631273894718791712 mysqld io_getevents >
+1631273894718791829 mysqld io_getevents >
+1631273894718791849 mysqld io_getevents >
+1631273894718791861 mysqld io_getevents >
+1631273894718791873 mysqld io_getevents >
+1631273894718810444 mysqld io_getevents <
+1631273894718813777 mysqld io_getevents >
+1631273894954594228 apache2 select < res=0 
+1631273894954606072 apache2 wait4 >
+1631273894954612314 apache2 wait4 <
+1631273894954614379 apache2 select >
+1631273894958963413 mysqld io_getevents <
+1631273894958972702 mysqld io_getevents >
+1631273895016788660 mysqld io_getevents <
+1631273895016798393 mysqld io_getevents >
+1631273895016848374 mysqld io_getevents <
+1631273895016855134 mysqld io_getevents >
+1631273895023558497 mysqld io_getevents <
+1631273895023569759 mysqld io_getevents >
+1631273895219101051 mysqld io_getevents <
+1631273895219101077 mysqld io_getevents <
+1631273895219101096 mysqld io_getevents <
+1631273895219101119 mysqld io_getevents <
+1631273895219101192 mysqld io_getevents <
+1631273895219111744 mysqld io_getevents >
+1631273895219111861 mysqld io_getevents >
+1631273895219111880 mysqld io_getevents >
+1631273895219111900 mysqld io_getevents >
+1631273895219111910 mysqld io_getevents >
+1631273895219129322 mysqld io_getevents <
+1631273895219132720 mysqld io_getevents >
+1631273895452316107 mysqld futex < res=-110(ETIMEDOUT) 
+1631273895452316257 mysqld futex < res=-110(ETIMEDOUT) 
+1631273895452325673 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273895452325803 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273895452328158 mysqld futex < res=0 
+1631273895452328369 mysqld futex < res=0 
+1631273895452334868 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=13 
+1631273895452365587 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=13 
+1631273895459264937 mysqld io_getevents <
+1631273895459276435 mysqld io_getevents >
+1631273895460032148 mysqld select < res=0 
+1631273895460055706 mysqld select >
+1631273895508449113 mysqld select < res=0 
+1631273895508449227 mysqld select < res=0 
+1631273895508469290 mysqld select >
+1631273895508499529 mysqld select >
+1631273895517083189 mysqld io_getevents <
+1631273895517083305 mysqld io_getevents <
+1631273895517093531 mysqld io_getevents >
+1631273895517093638 mysqld io_getevents >
+1631273895519530933 mysqld select < res=0 
+1631273895519539609 mysqld select >
+1631273895523862938 mysqld io_getevents <
+1631273895523873921 mysqld io_getevents >
+1631273895719436464 mysqld io_getevents <
+1631273895719438999 mysqld io_getevents <
+1631273895719439162 mysqld io_getevents <
+1631273895719439936 mysqld io_getevents <
+1631273895719440036 mysqld io_getevents <
+1631273895719446572 mysqld io_getevents >
+1631273895719446700 mysqld io_getevents >
+1631273895719446725 mysqld io_getevents >
+1631273895719447057 mysqld io_getevents >
+1631273895719447153 mysqld io_getevents >
+1631273895719461883 mysqld io_getevents <
+1631273895719465230 mysqld io_getevents >
+1631273895955853385 apache2 select < res=0 
+1631273895955864842 apache2 wait4 >
+1631273895955871414 apache2 wait4 <
+1631273895955873553 apache2 select >
+1631273895959565367 mysqld io_getevents <
+1631273895959576684 mysqld io_getevents >
+1631273896017388992 mysqld io_getevents <
+1631273896017389150 mysqld io_getevents <
+1631273896017400246 mysqld io_getevents >
+1631273896017400338 mysqld io_getevents >
+1631273896024166416 mysqld io_getevents <
+1631273896024177525 mysqld io_getevents >
+1631273896219759190 mysqld io_getevents <
+1631273896219759222 mysqld io_getevents <
+1631273896219759244 mysqld io_getevents <
+1631273896219759256 mysqld io_getevents <
+1631273896219759266 mysqld io_getevents <
+1631273896219769818 mysqld io_getevents >
+1631273896219769917 mysqld io_getevents >
+1631273896219769928 mysqld io_getevents >
+1631273896219769952 mysqld io_getevents >
+1631273896219769963 mysqld io_getevents >
+1631273896219788041 mysqld io_getevents <
+1631273896219791471 mysqld io_getevents >
+1631273896452492553 mysqld futex < res=-110(ETIMEDOUT) 
+1631273896452492663 mysqld futex < res=-110(ETIMEDOUT) 
+1631273896452502540 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273896452502688 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273896452505061 mysqld futex < res=0 
+1631273896452505295 mysqld futex < res=0 
+1631273896452512035 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=15 
+1631273896452541627 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=15 
+1631273896459710122 mysqld io_getevents <
+1631273896459721315 mysqld io_getevents >
+1631273896461172225 mysqld select < res=0 
+1631273896461197458 mysqld select >
+1631273896509715510 mysqld select < res=0 
+1631273896509715620 mysqld select < res=0 
+1631273896509735555 mysqld select >
+1631273896509756458 mysqld select >
+1631273896517670720 mysqld io_getevents <
+1631273896517670759 mysqld io_getevents <
+1631273896517681246 mysqld io_getevents >
+1631273896517681357 mysqld io_getevents >
+1631273896520649038 mysqld select < res=0 
+1631273896520657788 mysqld select >
+1631273896524465157 mysqld io_getevents <
+1631273896524476204 mysqld io_getevents >
+1631273896720078961 mysqld io_getevents <
+1631273896720078990 mysqld io_getevents <
+1631273896720079026 mysqld io_getevents <
+1631273896720079047 mysqld io_getevents <
+1631273896720079086 mysqld io_getevents <
+1631273896720089807 mysqld io_getevents >
+1631273896720089935 mysqld io_getevents >
+1631273896720089946 mysqld io_getevents >
+1631273896720089958 mysqld io_getevents >
+1631273896720089979 mysqld io_getevents >
+1631273896720108823 mysqld io_getevents <
+1631273896720112346 mysqld io_getevents >
+1631273896957114624 apache2 select < res=0 
+1631273896957126143 apache2 wait4 >
+1631273896957132864 apache2 wait4 <
+1631273896957135005 apache2 select >
+1631273896960006450 mysqld io_getevents <
+1631273896960017311 mysqld io_getevents >
+1631273897017976701 mysqld io_getevents <
+1631273897017976884 mysqld io_getevents <
+1631273897017987359 mysqld io_getevents >
+1631273897017987464 mysqld io_getevents >
+1631273897024759426 mysqld io_getevents <
+1631273897024770508 mysqld io_getevents >
+1631273897220392360 mysqld io_getevents <
+1631273897220392379 mysqld io_getevents <
+1631273897220392433 mysqld io_getevents <
+1631273897220392477 mysqld io_getevents <
+1631273897220392504 mysqld io_getevents <
+1631273897220403331 mysqld io_getevents >
+1631273897220403435 mysqld io_getevents >
+1631273897220403444 mysqld io_getevents >
+1631273897220403465 mysqld io_getevents >
+1631273897220403477 mysqld io_getevents >
+1631273897220421685 mysqld io_getevents <
+1631273897220424957 mysqld io_getevents >
+1631273897452795946 mysqld futex < res=-110(ETIMEDOUT) 
+1631273897452796113 mysqld futex < res=-110(ETIMEDOUT) 
+1631273897452805764 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273897452805935 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273897452808707 mysqld futex < res=0 
+1631273897452808784 mysqld futex < res=0 
+1631273897452815473 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=17 
+1631273897452846142 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=17 
+1631273897460109498 mysqld io_getevents <
+1631273897460120658 mysqld io_getevents >
+1631273897462420705 mysqld select < res=0 
+1631273897462444430 mysqld select >
+1631273897510981016 mysqld select < res=0 
+1631273897510981141 mysqld select < res=0 
+1631273897511000879 mysqld select >
+1631273897511040819 mysqld select >
+1631273897518278271 mysqld io_getevents <
+1631273897518278589 mysqld io_getevents <
+1631273897518288636 mysqld io_getevents >
+1631273897518288736 mysqld io_getevents >
+1631273897521764867 mysqld select < res=0 
+1631273897521773760 mysqld select >
+1631273897525055588 mysqld io_getevents <
+1631273897525066629 mysqld io_getevents >
+1631273897720578351 mysqld io_getevents <
+1631273897720578469 mysqld io_getevents <
+1631273897720578478 mysqld io_getevents <
+1631273897720578576 mysqld io_getevents <
+1631273897720578861 mysqld io_getevents <
+1631273897720588734 mysqld io_getevents >
+1631273897720588836 mysqld io_getevents >
+1631273897720588852 mysqld io_getevents >
+1631273897720588865 mysqld io_getevents >
+1631273897720588886 mysqld io_getevents >
+1631273897720606806 mysqld io_getevents <
+1631273897720610201 mysqld io_getevents >
+1631273897958184646 apache2 select < res=0 
+1631273897958188825 apache2 wait4 >
+1631273897958190454 apache2 wait4 <
+1631273897958191170 apache2 select >
+1631273897960179352 mysqld io_getevents <
+1631273897960182218 mysqld io_getevents >
+1631273898018362098 mysqld io_getevents <
+1631273898018368514 mysqld io_getevents >
+1631273898018404899 mysqld io_getevents <
+1631273898018413004 mysqld io_getevents >
+1631273898025226414 mysqld io_getevents <
+1631273898025233632 mysqld io_getevents >
+1631273898220769814 mysqld io_getevents <
+1631273898220769947 mysqld io_getevents <
+1631273898220769949 mysqld io_getevents <
+1631273898220769978 mysqld io_getevents <
+1631273898220769988 mysqld io_getevents <
+1631273898220780067 mysqld io_getevents >
+1631273898220780174 mysqld io_getevents >
+1631273898220780189 mysqld io_getevents >
+1631273898220780205 mysqld io_getevents >
+1631273898220780219 mysqld io_getevents >
+1631273898220797580 mysqld io_getevents <
+1631273898220800741 mysqld io_getevents >
+1631273898453012086 mysqld futex < res=-110(ETIMEDOUT) 
+1631273898453012203 mysqld futex < res=-110(ETIMEDOUT) 
+1631273898453022065 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273898453022075 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273898453024629 mysqld futex < res=0 
+1631273898453024852 mysqld futex < res=0 
+1631273898453031252 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=19 
+1631273898453062673 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=19 
+1631273898460466780 mysqld io_getevents <
+1631273898460477069 mysqld io_getevents >
+1631273898463672596 mysqld select < res=0 
+1631273898463696013 mysqld select >
+1631273898511269085 mysqld select < res=0 
+1631273898511292981 mysqld select >
+1631273898512184992 mysqld select < res=0 
+1631273898512204806 mysqld select >
+1631273898518660158 mysqld io_getevents <
+1631273898518660276 mysqld io_getevents <
+1631273898518671123 mysqld io_getevents >
+1631273898518671249 mysqld io_getevents >
+1631273898522882767 mysqld select < res=0 
+1631273898522891810 mysqld select >
+1631273898525519599 mysqld io_getevents <
+1631273898525530914 mysqld io_getevents >
+1631273898720953512 mysqld io_getevents <
+1631273898720953539 mysqld io_getevents <
+1631273898720953572 mysqld io_getevents <
+1631273898720953625 mysqld io_getevents <
+1631273898720953782 mysqld io_getevents <
+1631273898720963855 mysqld io_getevents >
+1631273898720963966 mysqld io_getevents >
+1631273898720963986 mysqld io_getevents >
+1631273898720964004 mysqld io_getevents >
+1631273898720964022 mysqld io_getevents >
+1631273898720981774 mysqld io_getevents <
+1631273898720985171 mysqld io_getevents >
+1631273898959436404 apache2 select < res=0 
+1631273898959448569 apache2 wait4 >
+1631273898959454628 apache2 wait4 <
+1631273898959456789 apache2 select >
+1631273898960737742 mysqld io_getevents <
+1631273898960748315 mysqld io_getevents >
+1631273899018809199 mysqld io_getevents <
+1631273899018809876 mysqld io_getevents <
+1631273899018819096 mysqld io_getevents >
+1631273899018819201 mysqld io_getevents >
+1631273899025658842 mysqld io_getevents <
+1631273899025668592 mysqld io_getevents >
+1631273899221141194 mysqld io_getevents <
+1631273899221141321 mysqld io_getevents <
+1631273899221141357 mysqld io_getevents <
+1631273899221141386 mysqld io_getevents <
+1631273899221141415 mysqld io_getevents <
+1631273899221150797 mysqld io_getevents >
+1631273899221150919 mysqld io_getevents >
+1631273899221150937 mysqld io_getevents >
+1631273899221151020 mysqld io_getevents >
+1631273899221151030 mysqld io_getevents >
+1631273899221169267 mysqld io_getevents <
+1631273899221172942 mysqld io_getevents >
+1631273899330399752 mysqld futex < res=-110(ETIMEDOUT) 
+1631273899330408506 mysqld futex > addr=7FEA61C68240 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273899330410985 mysqld futex < res=0 
+1631273899330416717 mysqld futex > addr=7FEA61C6827C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=5 
+1631273899452194118 mysqld futex < res=-110(ETIMEDOUT) 
+1631273899452204115 mysqld futex > addr=7FEA61C69C80 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273899452207084 mysqld futex < res=0 
+1631273899452214784 mysqld futex > addr=7FEA61C69CBC op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=5 
+1631273899453266518 mysqld futex < res=-110(ETIMEDOUT) 
+1631273899453266751 mysqld futex < res=-110(ETIMEDOUT) 
+1631273899453276368 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273899453276512 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273899453278900 mysqld futex < res=0 
+1631273899453279119 mysqld futex < res=0 
+1631273899453285790 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=21 
+1631273899453315762 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=21 
+1631273899461006831 mysqld io_getevents <
+1631273899461017725 mysqld io_getevents >
+1631273899464935537 mysqld select < res=0 
+1631273899464960464 mysqld select >
+1631273899512531886 mysqld select < res=0 
+1631273899512556501 mysqld select >
+1631273899513384878 mysqld select < res=0 
+1631273899513405323 mysqld select >
+1631273899519105664 mysqld io_getevents <
+1631273899519105704 mysqld io_getevents <
+1631273899519116035 mysqld io_getevents >
+1631273899519116125 mysqld io_getevents >
+1631273899523651225 mysqld select < res=0 
+1631273899523660366 mysqld select >
+1631273899525943662 mysqld io_getevents <
+1631273899525954304 mysqld io_getevents >
+1631273899721456986 mysqld io_getevents <
+1631273899721457018 mysqld io_getevents <
+1631273899721457036 mysqld io_getevents <
+1631273899721457138 mysqld io_getevents <
+1631273899721457152 mysqld io_getevents <
+1631273899721467705 mysqld io_getevents >
+1631273899721467830 mysqld io_getevents >
+1631273899721467843 mysqld io_getevents >
+1631273899721467854 mysqld io_getevents >
+1631273899721467872 mysqld io_getevents >
+1631273899721485848 mysqld io_getevents <
+1631273899721489304 mysqld io_getevents >
+1631273899960647538 apache2 select < res=0 
+1631273899960653925 apache2 wait4 >
+1631273899960656892 apache2 wait4 <
+1631273899960658174 apache2 select >
+1631273899961226235 mysqld io_getevents <
+1631273899961231747 mysqld io_getevents >
+1631273900019383627 mysqld io_getevents <
+1631273900019383816 mysqld io_getevents <
+1631273900019394238 mysqld io_getevents >
+1631273900019394344 mysqld io_getevents >
+1631273900026247611 mysqld io_getevents <
+1631273900026259090 mysqld io_getevents >
+1631273900221775453 mysqld io_getevents <
+1631273900221775591 mysqld io_getevents <
+1631273900221775641 mysqld io_getevents <
+1631273900221775653 mysqld io_getevents <
+1631273900221775684 mysqld io_getevents <
+1631273900221785940 mysqld io_getevents >
+1631273900221786036 mysqld io_getevents >
+1631273900221786054 mysqld io_getevents >
+1631273900221786076 mysqld io_getevents >
+1631273900221786088 mysqld io_getevents >
+1631273900221804161 mysqld io_getevents <
+1631273900221807444 mysqld io_getevents >
+1631273900453406453 mysqld futex < res=-110(ETIMEDOUT) 
+1631273900453415263 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273900453417349 mysqld futex < res=0 
+1631273900453424638 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=23 
+1631273900453434018 mysqld futex < res=-110(ETIMEDOUT) 
+1631273900453441300 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273900453443202 mysqld futex < res=0 
+1631273900453478037 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=23 
+1631273900461490179 mysqld io_getevents <
+1631273900461500342 mysqld io_getevents >
+1631273900466185115 mysqld select < res=0 
+1631273900466208697 mysqld select >
+1631273900513805516 mysqld select < res=0 
+1631273900513830243 mysqld select >
+1631273900514581152 mysqld select < res=0 
+1631273900514600774 mysqld select >
+1631273900519683278 mysqld io_getevents <
+1631273900519683479 mysqld io_getevents <
+1631273900519693786 mysqld io_getevents >
+1631273900519693890 mysqld io_getevents >
+1631273900524777820 mysqld select < res=0 
+1631273900524786729 mysqld select >
+1631273900526530645 mysqld io_getevents <
+1631273900526541295 mysqld io_getevents >
+1631273900722090313 mysqld io_getevents <
+1631273900722090506 mysqld io_getevents <
+1631273900722090514 mysqld io_getevents <
+1631273900722090541 mysqld io_getevents <
+1631273900722090560 mysqld io_getevents <
+1631273900722101443 mysqld io_getevents >
+1631273900722101560 mysqld io_getevents >
+1631273900722101582 mysqld io_getevents >
+1631273900722101592 mysqld io_getevents >
+1631273900722101611 mysqld io_getevents >
+1631273900722120110 mysqld io_getevents <
+1631273900722123492 mysqld io_getevents >
+1631273900961668511 mysqld io_getevents <
+1631273900961679398 mysqld io_getevents >
+1631273900961736860 apache2 select < res=0 
+1631273900961746828 apache2 wait4 >
+1631273900961752800 apache2 wait4 <
+1631273900961754948 apache2 select >
+1631273901019987683 mysqld io_getevents <
+1631273901019987796 mysqld io_getevents <
+1631273901019998085 mysqld io_getevents >
+1631273901019998186 mysqld io_getevents >
+1631273901026821410 mysqld io_getevents <
+1631273901026832253 mysqld io_getevents >
+1631273901222391053 mysqld io_getevents <
+1631273901222391183 mysqld io_getevents <
+1631273901222391219 mysqld io_getevents <
+1631273901222391278 mysqld io_getevents <
+1631273901222391342 mysqld io_getevents <
+1631273901222401834 mysqld io_getevents >
+1631273901222401940 mysqld io_getevents >
+1631273901222401955 mysqld io_getevents >
+1631273901222401972 mysqld io_getevents >
+1631273901222401991 mysqld io_getevents >
+1631273901222419025 mysqld io_getevents <
+1631273901222422322 mysqld io_getevents >
+1631273901453712232 mysqld futex < res=-110(ETIMEDOUT) 
+1631273901453712367 mysqld futex < res=-110(ETIMEDOUT) 
+1631273901453721923 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273901453722055 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273901453724382 mysqld futex < res=0 
+1631273901453724980 mysqld futex < res=0 
+1631273901453731453 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=25 
+1631273901453761666 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=25 
+1631273901461978146 mysqld io_getevents <
+1631273901461988771 mysqld io_getevents >
+1631273901467441984 mysqld select < res=0 
+1631273901467467295 mysqld select >
+1631273901514904640 mysqld select < res=0 
+1631273901514927897 mysqld select >
+1631273901515672800 mysqld select < res=0 
+1631273901515684990 mysqld select >
+1631273901520130059 mysqld io_getevents <
+1631273901520131386 mysqld io_getevents <
+1631273901520137354 mysqld io_getevents >
+1631273901520139110 mysqld io_getevents >
+1631273901525861402 mysqld select < res=0 
+1631273901525866949 mysqld select >
+1631273901526958320 mysqld io_getevents <
+1631273901526965173 mysqld io_getevents >
+1631273901722526252 mysqld io_getevents <
+1631273901722535940 mysqld io_getevents >
+1631273901722559999 mysqld io_getevents <
+1631273901722560341 mysqld io_getevents <
+1631273901722561949 mysqld io_getevents <
+1631273901722564395 mysqld io_getevents <
+1631273901722568017 mysqld io_getevents >
+1631273901722568065 mysqld io_getevents >
+1631273901722569476 mysqld io_getevents >
+1631273901722571299 mysqld io_getevents >
+1631273901722580591 mysqld io_getevents <
+1631273901722584135 mysqld io_getevents >
+1631273901962078735 mysqld io_getevents <
+1631273901962081613 mysqld io_getevents >
+1631273901962760442 apache2 select < res=0 
+1631273901962763718 apache2 wait4 >
+1631273901962765497 apache2 wait4 <
+1631273901962766371 apache2 select >
+1631273902020423956 mysqld io_getevents <
+1631273902020424073 mysqld io_getevents <
+1631273902020433929 mysqld io_getevents >
+1631273902020434028 mysqld io_getevents >
+1631273902027233807 mysqld io_getevents <
+1631273902027244349 mysqld io_getevents >
+1631273902222842000 mysqld io_getevents <
+1631273902222842028 mysqld io_getevents <
+1631273902222842049 mysqld io_getevents <
+1631273902222842149 mysqld io_getevents <
+1631273902222842281 mysqld io_getevents <
+1631273902222851892 mysqld io_getevents >
+1631273902222852018 mysqld io_getevents >
+1631273902222852031 mysqld io_getevents >
+1631273902222852046 mysqld io_getevents >
+1631273902222852073 mysqld io_getevents >
+1631273902222869906 mysqld io_getevents <
+1631273902222873340 mysqld io_getevents >
+1631273902283042544 mysqld futex < res=-110(ETIMEDOUT) 
+1631273902283052333 mysqld futex > addr=7FEA61C69890 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273902283054983 mysqld futex < res=0 
+1631273902283061214 mysqld futex > addr=7FEA61C698CC op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=5 
+1631273902453811035 mysqld futex < res=-110(ETIMEDOUT) 
+1631273902453819911 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273902453821639 mysqld futex < res=0 
+1631273902453828620 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=27 
+1631273902453882418 mysqld futex < res=-110(ETIMEDOUT) 
+1631273902453889920 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273902453891764 mysqld futex < res=0 
+1631273902453927677 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=27 
+1631273902462363038 mysqld io_getevents <
+1631273902462374160 mysqld io_getevents >
+1631273902468651328 mysqld select < res=0 
+1631273902468676651 mysqld select >
+1631273902516039560 mysqld select < res=0 
+1631273902516063839 mysqld select >
+1631273902516793923 mysqld select < res=0 
+1631273902516813838 mysqld select >
+1631273902520602844 mysqld io_getevents <
+1631273902520602951 mysqld io_getevents <
+1631273902520613349 mysqld io_getevents >
+1631273902520613447 mysqld io_getevents >
+1631273902526979287 mysqld select < res=0 
+1631273902526987941 mysqld select >
+1631273902527441163 mysqld io_getevents <
+1631273902527451445 mysqld io_getevents >
+1631273902723159302 mysqld io_getevents <
+1631273902723159434 mysqld io_getevents <
+1631273902723159495 mysqld io_getevents <
+1631273902723159568 mysqld io_getevents <
+1631273902723160696 mysqld io_getevents <
+1631273902723169553 mysqld io_getevents >
+1631273902723169674 mysqld io_getevents >
+1631273902723169688 mysqld io_getevents >
+1631273902723169701 mysqld io_getevents >
+1631273902723169711 mysqld io_getevents >
+1631273902723187536 mysqld io_getevents <
+1631273902723191015 mysqld io_getevents >
+1631273902962541756 mysqld io_getevents <
+1631273902962553101 mysqld io_getevents >
+1631273902963922832 apache2 select < res=0 
+1631273902963934330 apache2 wait4 >
+1631273902963940882 apache2 wait4 <
+1631273902963943184 apache2 select >
+1631273903020911566 mysqld io_getevents <
+1631273903020911679 mysqld io_getevents <
+1631273903020922748 mysqld io_getevents >
+1631273903020922848 mysqld io_getevents >
+1631273903027736126 mysqld io_getevents <
+1631273903027746321 mysqld io_getevents >
+1631273903223477496 mysqld io_getevents <
+1631273903223477603 mysqld io_getevents <
+1631273903223477700 mysqld io_getevents <
+1631273903223477707 mysqld io_getevents <
+1631273903223477731 mysqld io_getevents <
+1631273903223488071 mysqld io_getevents >
+1631273903223488185 mysqld io_getevents >
+1631273903223488204 mysqld io_getevents >
+1631273903223488219 mysqld io_getevents >
+1631273903223488232 mysqld io_getevents >
+1631273903223506633 mysqld io_getevents <
+1631273903223510008 mysqld io_getevents >
+1631273903453975148 mysqld futex < res=-110(ETIMEDOUT) 
+1631273903453985129 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273903453987855 mysqld futex < res=0 
+1631273903453995180 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=29 
+1631273903454057132 mysqld futex < res=-110(ETIMEDOUT) 
+1631273903454062980 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273903454064861 mysqld futex < res=0 
+1631273903454099976 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=29 
+1631273903462842813 mysqld io_getevents <
+1631273903462853967 mysqld io_getevents >
+1631273903469918515 mysqld select < res=0 
+1631273903469942433 mysqld select >
+1631273903517139043 mysqld select < res=0 
+1631273903517162418 mysqld select >
+1631273903517892660 mysqld select < res=0 
+1631273903517904188 mysqld select >
+1631273903521042780 mysqld io_getevents <
+1631273903521050379 mysqld io_getevents >
+1631273903521056031 mysqld io_getevents <
+1631273903521064253 mysqld io_getevents >
+1631273903527873049 mysqld io_getevents <
+1631273903527879914 mysqld io_getevents >
+1631273903528057223 mysqld select < res=0 
+1631273903528062580 mysqld select >
+1631273903723617350 mysqld io_getevents <
+1631273903723627043 mysqld io_getevents >
+1631273903723642933 mysqld io_getevents <
+1631273903723643016 mysqld io_getevents <
+1631273903723643898 mysqld io_getevents <
+1631273903723643965 mysqld io_getevents <
+1631273903723644715 mysqld io_getevents <
+1631273903723647133 mysqld io_getevents >
+1631273903723650998 mysqld io_getevents >
+1631273903723651027 mysqld io_getevents >
+1631273903723651069 mysqld io_getevents >
+1631273903723651648 mysqld io_getevents >
+1631273903963019718 mysqld io_getevents <
+1631273903963030924 mysqld io_getevents >
+1631273903965060220 apache2 select < res=0 
+1631273903965071730 apache2 wait4 >
+1631273903965078118 apache2 wait4 <
+1631273903965080442 apache2 select >
+1631273904021347255 mysqld io_getevents <
+1631273904021347365 mysqld io_getevents <
+1631273904021357777 mysqld io_getevents >
+1631273904021357868 mysqld io_getevents >
+1631273904028167410 mysqld io_getevents <
+1631273904028177868 mysqld io_getevents >
+1631273904223933485 mysqld io_getevents <
+1631273904223933577 mysqld io_getevents <
+1631273904223933602 mysqld io_getevents <
+1631273904223933706 mysqld io_getevents <
+1631273904223934773 mysqld io_getevents <
+1631273904223943995 mysqld io_getevents >
+1631273904223944091 mysqld io_getevents >
+1631273904223944105 mysqld io_getevents >
+1631273904223944125 mysqld io_getevents >
+1631273904223944138 mysqld io_getevents >
+1631273904223963775 mysqld io_getevents <
+1631273904223967195 mysqld io_getevents >
+1631273904330487007 mysqld futex < res=-110(ETIMEDOUT) 
+1631273904330495104 mysqld futex > addr=7FEA61C68240 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273904330496766 mysqld futex < res=0 
+1631273904330502479 mysqld futex > addr=7FEA61C6827C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=7 
+1631273904452333047 mysqld futex < res=-110(ETIMEDOUT) 
+1631273904452342165 mysqld futex > addr=7FEA61C69C80 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273904452344176 mysqld futex < res=0 
+1631273904452351979 mysqld futex > addr=7FEA61C69CBC op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=7 
+1631273904454072111 mysqld futex < res=-110(ETIMEDOUT) 
+1631273904454078461 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273904454080239 mysqld futex < res=0 
+1631273904454085283 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=31 
+1631273904454220061 mysqld futex < res=-110(ETIMEDOUT) 
+1631273904454227815 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273904454229673 mysqld futex < res=0 
+1631273904454264991 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=31 
+1631273904463320935 mysqld io_getevents <
+1631273904463331978 mysqld io_getevents >
+1631273904471172337 mysqld select < res=0 
+1631273904471196035 mysqld select >
+1631273904518384624 mysqld select < res=0 
+1631273904518409041 mysqld select >
+1631273904519075462 mysqld select < res=0 
+1631273904519095542 mysqld select >
+1631273904521638088 mysqld io_getevents <
+1631273904521638270 mysqld io_getevents <
+1631273904521648581 mysqld io_getevents >
+1631273904521648684 mysqld io_getevents >
+1631273904528470123 mysqld io_getevents <
+1631273904528481097 mysqld io_getevents >
+1631273904529239625 mysqld select < res=0 
+1631273904529248486 mysqld select >
+1631273904724253411 mysqld io_getevents <
+1631273904724253447 mysqld io_getevents <
+1631273904724253510 mysqld io_getevents <
+1631273904724253551 mysqld io_getevents <
+1631273904724253565 mysqld io_getevents <
+1631273904724263835 mysqld io_getevents >
+1631273904724263953 mysqld io_getevents >
+1631273904724263975 mysqld io_getevents >
+1631273904724263992 mysqld io_getevents >
+1631273904724264007 mysqld io_getevents >
+1631273904724281664 mysqld io_getevents <
+1631273904724285209 mysqld io_getevents >
+1631273904963452139 mysqld io_getevents <
+1631273904963462139 mysqld io_getevents >
+1631273904966149759 apache2 select < res=0 
+1631273904966160045 apache2 wait4 >
+1631273904966165624 apache2 wait4 <
+1631273904966167673 apache2 select >
+1631273905021943171 mysqld io_getevents <
+1631273905021943283 mysqld io_getevents <
+1631273905021954099 mysqld io_getevents >
+1631273905021954205 mysqld io_getevents >
+1631273905028771081 mysqld io_getevents <
+1631273905028782304 mysqld io_getevents >
+1631273905224569676 mysqld io_getevents <
+1631273905224569976 mysqld io_getevents <
+1631273905224570000 mysqld io_getevents <
+1631273905224570036 mysqld io_getevents <
+1631273905224570915 mysqld io_getevents <
+1631273905224579936 mysqld io_getevents >
+1631273905224580051 mysqld io_getevents >
+1631273905224580063 mysqld io_getevents >
+1631273905224580079 mysqld io_getevents >
+1631273905224580096 mysqld io_getevents >
+1631273905224598171 mysqld io_getevents <
+1631273905224601515 mysqld io_getevents >
+1631273905454370977 mysqld futex < res=-110(ETIMEDOUT) 
+1631273905454381575 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273905454384378 mysqld futex < res=0 
+1631273905454391165 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=33 
+1631273905454392414 mysqld futex < res=-110(ETIMEDOUT) 
+1631273905454399964 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273905454401818 mysqld futex < res=0 
+1631273905454436687 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=33 
+1631273905463752200 mysqld io_getevents <
+1631273905463763323 mysqld io_getevents >
+1631273905472441326 mysqld select < res=0 
+1631273905472465232 mysqld select >
+1631273905519482168 mysqld select < res=0 
+1631273905519505398 mysqld select >
+1631273905520125758 mysqld select < res=0 
+1631273905520137503 mysqld select >
+1631273905522092050 mysqld io_getevents <
+1631273905522094496 mysqld io_getevents <
+1631273905522099293 mysqld io_getevents >
+1631273905522102314 mysqld io_getevents >
+1631273905528910718 mysqld io_getevents <
+1631273905528917571 mysqld io_getevents >
+1631273905530318092 mysqld select < res=0 
+1631273905530323456 mysqld select >
+1631273905724890996 mysqld io_getevents <
+1631273905724891167 mysqld io_getevents <
+1631273905724891199 mysqld io_getevents <
+1631273905724891209 mysqld io_getevents <
+1631273905724891217 mysqld io_getevents <
+1631273905724902217 mysqld io_getevents >
+1631273905724902375 mysqld io_getevents >
+1631273905724902388 mysqld io_getevents >
+1631273905724902407 mysqld io_getevents >
+1631273905724902433 mysqld io_getevents >
+1631273905724919586 mysqld io_getevents <
+1631273905724923000 mysqld io_getevents >
+1631273905963853897 mysqld io_getevents <
+1631273905963856861 mysqld io_getevents >
+1631273905967223805 apache2 select < res=0 
+1631273905967227182 apache2 wait4 >
+1631273905967229258 apache2 wait4 <
+1631273905967230152 apache2 select >
+1631273906022418238 mysqld io_getevents <
+1631273906022418272 mysqld io_getevents <
+1631273906022421787 mysqld io_getevents >
+1631273906022421808 mysqld io_getevents >
+1631273906029227571 mysqld io_getevents <
+1631273906029231755 mysqld io_getevents >
+1631273906225182501 mysqld io_getevents <
+1631273906225182610 mysqld io_getevents <
+1631273906225182631 mysqld io_getevents <
+1631273906225182652 mysqld io_getevents <
+1631273906225182667 mysqld io_getevents <
+1631273906225192628 mysqld io_getevents >
+1631273906225192732 mysqld io_getevents >
+1631273906225192755 mysqld io_getevents >
+1631273906225192766 mysqld io_getevents >
+1631273906225192784 mysqld io_getevents >
+1631273906225210870 mysqld io_getevents <
+1631273906225214228 mysqld io_getevents >
+1631273906454506024 mysqld futex < res=-110(ETIMEDOUT) 
+1631273906454514346 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273906454516339 mysqld futex < res=0 
+1631273906454523410 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=35 
+1631273906454611073 mysqld futex < res=-110(ETIMEDOUT) 
+1631273906454612478 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273906454612836 mysqld futex < res=0 
+1631273906454623975 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=35 
+1631273906463913952 mysqld io_getevents <
+1631273906463917022 mysqld io_getevents >
+1631273906473585361 mysqld select < res=0 
+1631273906473595054 mysqld select >
+1631273906520615819 mysqld select < res=0 
+1631273906520638726 mysqld select >
+1631273906521242777 mysqld select < res=0 
+1631273906521261706 mysqld select >
+1631273906522675264 mysqld io_getevents <
+1631273906522675438 mysqld io_getevents <
+1631273906522685503 mysqld io_getevents >
+1631273906522685600 mysqld io_getevents >
+1631273906529499329 mysqld io_getevents <
+1631273906529510045 mysqld io_getevents >
+1631273906531541895 mysqld select < res=0 
+1631273906531550777 mysqld select >
+1631273906725477437 mysqld io_getevents <
+1631273906725477508 mysqld io_getevents <
+1631273906725477528 mysqld io_getevents <
+1631273906725477550 mysqld io_getevents <
+1631273906725477575 mysqld io_getevents <
+1631273906725488312 mysqld io_getevents >
+1631273906725488422 mysqld io_getevents >
+1631273906725488437 mysqld io_getevents >
+1631273906725488453 mysqld io_getevents >
+1631273906725488466 mysqld io_getevents >
+1631273906725506819 mysqld io_getevents <
+1631273906725510122 mysqld io_getevents >
+1631273906964084693 mysqld io_getevents <
+1631273906964095892 mysqld io_getevents >
+1631273906967541747 apache2 select < res=0 
+1631273906967553348 apache2 wait4 >
+1631273906967559403 apache2 wait4 <
+1631273906967561530 apache2 select >
+1631273907022980491 mysqld io_getevents <
+1631273907022980530 mysqld io_getevents <
+1631273907022991491 mysqld io_getevents >
+1631273907022991604 mysqld io_getevents >
+1631273907029644903 mysqld io_getevents <
+1631273907029654611 mysqld io_getevents >
+1631273907225769191 mysqld io_getevents <
+1631273907225769241 mysqld io_getevents <
+1631273907225769290 mysqld io_getevents <
+1631273907225769337 mysqld io_getevents <
+1631273907225770650 mysqld io_getevents <
+1631273907225779652 mysqld io_getevents >
+1631273907225779767 mysqld io_getevents >
+1631273907225779783 mysqld io_getevents >
+1631273907225779804 mysqld io_getevents >
+1631273907225779819 mysqld io_getevents >
+1631273907225798395 mysqld io_getevents <
+1631273907225801721 mysqld io_getevents >
+1631273907454735351 mysqld futex < res=-110(ETIMEDOUT) 
+1631273907454745498 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273907454748290 mysqld futex < res=0 
+1631273907454751780 mysqld futex < res=-110(ETIMEDOUT) 
+1631273907454755516 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=37 
+1631273907454759449 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273907454761222 mysqld futex < res=0 
+1631273907454797928 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=37 
+1631273907464386585 mysqld io_getevents <
+1631273907464398033 mysqld io_getevents >
+1631273907474814488 mysqld select < res=0 
+1631273907474837928 mysqld select >
+1631273907521884999 mysqld select < res=0 
+1631273907521908923 mysqld select >
+1631273907522432610 mysqld select < res=0 
+1631273907522452214 mysqld select >
+1631273907523217932 mysqld io_getevents <
+1631273907523218112 mysqld io_getevents <
+1631273907523228257 mysqld io_getevents >
+1631273907523228343 mysqld io_getevents >
+1631273907529948971 mysqld io_getevents <
+1631273907529959860 mysqld io_getevents >
+1631273907532781683 mysqld select < res=0 
+1631273907532790599 mysqld select >
+1631273907726084969 mysqld io_getevents <
+1631273907726085105 mysqld io_getevents <
+1631273907726085119 mysqld io_getevents <
+1631273907726085129 mysqld io_getevents <
+1631273907726085164 mysqld io_getevents <
+1631273907726095722 mysqld io_getevents >
+1631273907726095846 mysqld io_getevents >
+1631273907726095868 mysqld io_getevents >
+1631273907726095883 mysqld io_getevents >
+1631273907726095897 mysqld io_getevents >
+1631273907726112862 mysqld io_getevents <
+1631273907726116063 mysqld io_getevents >
+1631273907964525526 mysqld io_getevents <
+1631273907964535522 mysqld io_getevents >
+1631273907968582496 apache2 select < res=0 
+1631273907968592684 apache2 wait4 >
+1631273907968597775 apache2 wait4 <
+1631273907968599746 apache2 select >
+1631273908023391127 mysqld io_getevents <
+1631273908023391415 mysqld io_getevents <
+1631273908023401892 mysqld io_getevents >
+1631273908023401990 mysqld io_getevents >
+1631273908030258143 mysqld io_getevents <
+1631273908030269121 mysqld io_getevents >
+1631273908226406983 mysqld io_getevents <
+1631273908226407165 mysqld io_getevents <
+1631273908226407188 mysqld io_getevents <
+1631273908226407201 mysqld io_getevents <
+1631273908226407223 mysqld io_getevents <
+1631273908226417256 mysqld io_getevents >
+1631273908226417380 mysqld io_getevents >
+1631273908226417397 mysqld io_getevents >
+1631273908226417405 mysqld io_getevents >
+1631273908226417421 mysqld io_getevents >
+1631273908226436230 mysqld io_getevents <
+1631273908226439821 mysqld io_getevents >
+1631273908454913743 mysqld futex < res=-110(ETIMEDOUT) 
+1631273908454924051 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273908454926772 mysqld futex < res=0 
+1631273908454927612 mysqld futex < res=-110(ETIMEDOUT) 
+1631273908454933973 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=39 
+1631273908454935578 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273908454937438 mysqld futex < res=0 
+1631273908454974214 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=39 
+1631273908464699594 mysqld io_getevents <
+1631273908464710805 mysqld io_getevents >
+1631273908475656341 mysqld select < res=0 
+1631273908475680223 mysqld select >
+1631273908523151859 mysqld select < res=0 
+1631273908523176065 mysqld select >
+1631273908523617572 mysqld io_getevents <
+1631273908523617760 mysqld io_getevents <
+1631273908523617846 mysqld select < res=0 
+1631273908523627610 mysqld io_getevents >
+1631273908523627706 mysqld io_getevents >
+1631273908523636537 mysqld select >
+1631273908530563922 mysqld io_getevents <
+1631273908530575000 mysqld io_getevents >
+1631273908534024526 mysqld select < res=0 
+1631273908534033508 mysqld select >
+1631273908726725179 mysqld io_getevents <
+1631273908726725319 mysqld io_getevents <
+1631273908726725366 mysqld io_getevents <
+1631273908726725405 mysqld io_getevents <
+1631273908726726376 mysqld io_getevents <
+1631273908726736090 mysqld io_getevents >
+1631273908726736174 mysqld io_getevents >
+1631273908726736200 mysqld io_getevents >
+1631273908726736213 mysqld io_getevents >
+1631273908726736236 mysqld io_getevents >
+1631273908726754577 mysqld io_getevents <
+1631273908726757812 mysqld io_getevents >
+1631273908964785734 mysqld io_getevents <
+1631273908964795336 mysqld io_getevents >
+1631273908969664086 apache2 select < res=0 
+1631273908969674488 apache2 wait4 >
+1631273908969679721 apache2 wait4 <
+1631273908969681831 apache2 select >
+1631273909023766552 mysqld io_getevents <
+1631273909023766670 mysqld io_getevents <
+1631273909023776196 mysqld io_getevents >
+1631273909023776217 mysqld io_getevents >
+1631273909030702742 mysqld io_getevents <
+1631273909030709421 mysqld io_getevents >
+1631273909227045098 mysqld io_getevents <
+1631273909227045233 mysqld io_getevents <
+1631273909227045329 mysqld io_getevents <
+1631273909227045422 mysqld io_getevents <
+1631273909227045461 mysqld io_getevents <
+1631273909227055691 mysqld io_getevents >
+1631273909227055815 mysqld io_getevents >
+1631273909227055832 mysqld io_getevents >
+1631273909227055849 mysqld io_getevents >
+1631273909227055863 mysqld io_getevents >
+1631273909227074552 mysqld io_getevents <
+1631273909227077774 mysqld io_getevents >
+1631273909330621845 mysqld futex < res=-110(ETIMEDOUT) 
+1631273909330631068 mysqld futex > addr=7FEA61C68240 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273909330632911 mysqld futex < res=0 
+1631273909330638453 mysqld futex > addr=7FEA61C6827C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=9 
+1631273909452630413 mysqld futex < res=-110(ETIMEDOUT) 
+1631273909452640402 mysqld futex > addr=7FEA61C69C80 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273909452643044 mysqld futex < res=0 
+1631273909452650934 mysqld futex > addr=7FEA61C69CBC op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=9 
+1631273909455203009 mysqld futex < res=-110(ETIMEDOUT) 
+1631273909455203128 mysqld futex < res=-110(ETIMEDOUT) 
+1631273909455213173 mysqld futex > addr=7FEA61C695F0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273909455213319 mysqld futex > addr=7FEA61C681D0 op=129(FUTEX_PRIVATE_FLAG|FUTEX_WAKE) val=1 
+1631273909455215892 mysqld futex < res=0 
+1631273909455215988 mysqld futex < res=0 
+1631273909455222549 mysqld futex > addr=7FEA61C6962C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=41 
+1631273909455252723 mysqld futex > addr=7FEA61C6820C op=393(FUTEX_CLOCK_REALTIME|FUTEX_PRIVATE_FLAG|FUTEX_WAIT_BITSET) val=41 
+1631273909465088712 mysqld io_getevents <
+1631273909465099925 mysqld io_getevents >
+1631273909476879519 mysqld select < res=0 
+1631273909476902670 mysqld select >
+1631273909523915838 mysqld io_getevents <
+1631273909523916514 mysqld io_getevents <
+1631273909523925013 mysqld io_getevents >
+1631273909523925143 mysqld io_getevents >
+1631273909524251395 mysqld select < res=0 
+1631273909524272199 mysqld select >
+1631273909524710853 mysqld select < res=0 
+1631273909524722420 mysqld select >
+1631273909530833681 mysqld io_getevents <
+1631273909530840623 mysqld io_getevents >
+1631273909535104351 mysqld select < res=0 
+1631273909535109593 mysqld select >
+1631273909727364391 mysqld io_getevents <
+1631273909727364538 mysqld io_getevents <
+1631273909727364573 mysqld io_getevents <
+1631273909727364590 mysqld io_getevents <
+1631273909727364599 mysqld io_getevents <
+1631273909727375285 mysqld io_getevents >
+1631273909727375360 mysqld io_getevents >
+1631273909727375381 mysqld io_getevents >
+1631273909727375393 mysqld io_getevents >
+1631273909727375413 mysqld io_getevents >
+1631273909727394310 mysqld io_getevents <
+1631273909727397557 mysqld io_getevents >
+1631273909965266724 mysqld io_getevents <
+1631273909965277184 mysqld io_getevents >
+1631273909970708937 apache2 select < res=0 
+1631273909970719885 apache2 wait4 >
