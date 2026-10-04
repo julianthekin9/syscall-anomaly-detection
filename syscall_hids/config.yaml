@@ -4,8 +4,8 @@
 # Числа з порядком пишіть з крапкою (1.0e-4): PyYAML читає "1e-4" як рядок.
 
 # --- Дані ---
-dataset_root: ./LID-DS_DATASET/CVE-2020-9484-NEW
-services: [CVE-2020-9484]  # null — усі сценарії з dataset_root
+dataset_root: ./DATASET_LIDDS
+services: [PHP_CWE-434]  # null — усі сценарії з dataset_root
 
 # --- Ознаки ---
 use_arg_count_feature: true
