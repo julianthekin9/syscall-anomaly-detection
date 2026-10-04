@@ -5,10 +5,24 @@
 ## Запуск
 
 ```bash
-python experiments/lid_ds/convert.py /path/to/LID-DS-2021 ./DATASET_LIDDS --pre-attack-to-normal
+# прямо из скачанных zip-архивов сценариев, без распаковки:
+python experiments/lid_ds/convert.py LID-DS_DATASET/PHP_CWE-434.zip LID-DS_DATASET/CVE-2017-7529.zip --out ./DATASET_LIDDS
+# или из теки с уже распакованными сценариями:
+python experiments/lid_ds/convert.py /path/to/LID-DS-2021 --out ./DATASET_LIDDS
 # быстрая проверка на 3 записях каждого сплита одного сценария:
-python experiments/lid_ds/convert.py /path/to/LID-DS-2021 ./DATASET_LIDDS --scenarios CVE-2017-7529 --limit 3
+python experiments/lid_ds/convert.py /path/to/LID-DS-2021 --out ./DATASET_LIDDS --scenarios CVE-2017-7529 --limit 3
 ```
+
+Баланс test по строкам (normal ≈ abnormal): флаг `--balance-test` при конвертации или `--rebalance` для уже сконвертированного сценария:
+
+```bash
+python experiments/lid_ds/convert.py LID-DS_DATASET/PHP_CWE-434.zip --out ./DATASET_LIDDS --balance-test
+python experiments/lid_ds/convert.py --rebalance DATASET_LIDDS/PHP_CWE-434
+```
+
+Из `test/normal` случайно (`--seed`, по умолчанию 0) остаются целые записи, пока их суммарная длина не сравняется с атаками; остальные файлы удаляются с диска и помечаются в `manifest.json` полем `balanced_out`, итог пишется в `test_balance`. Записи не обрезаются. Повторный `--rebalance` того же сценария запрещён.
+
+Входы можно смешивать: архивы и теки. Тест в LID-DS 2021 лежит в `test/normal` и `test/normal_and_attack`, поэтому поиск записей рекурсивный. `__MACOSX` и `._*` пропускаются.
 
 Затем в `config.py` (или в YAML после этапа 3) указать `DATASET_ROOT = "./DATASET_LIDDS"`.
 
@@ -18,9 +32,10 @@ python experiments/lid_ds/convert.py /path/to/LID-DS-2021 ./DATASET_LIDDS --scen
 |---|---|
 | `<сценарий>/training/*.zip` | `<сценарий>/training/*.sc` |
 | `<сценарий>/validation/*.zip` | `<сценарий>/validation/*.sc` |
-| `test/*.zip` без эксплойта | `test/normal/*.sc` |
-| `test/*.zip` с эксплойтом | `test/abnormal/<имя>.sc`: только сегмент от первого `time.exploit[].absolute` до конца записи |
-| то же, часть до эксплойта | `test/normal/<имя>__pre.sc`, только с `--pre-attack-to-normal` |
+| `test/normal/*.zip` без эксплойта | `test/normal/*.sc` |
+| `test/**/*.zip` с эксплойтом | `test/abnormal/<имя>.sc`: только сегмент от первого `time.exploit[].absolute` до конца записи |
+| то же, часть до эксплойта | отбрасывается |
+| `test/normal_and_attack/*.zip` без эксплойта | пропускается (`skipped` в манифесте) |
 
 - Строка `ts uid pid process tid syscall dir params` (8 колонок) превращается в `ts process syscall dir params`, то есть в формат eBPF-коллектора.
 - zip читается потоково, `.sc` целиком в память не загружается.

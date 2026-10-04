@@ -123,6 +123,7 @@ probe_plots/
 realtime_runs/
 DATASET/
 LID-DS_DATASET/
+DATASET_LIDDS/
 REAL/
 data_cve-2019-5418/
 __MACOSX/
