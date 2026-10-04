@@ -27,7 +27,7 @@ def test_eval_test_split_matches_golden_auc(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)  # еталон рахувався на CPU
 
     reported: list[float] = []
-    monkeypatch.setattr(evaluation, "plot_roc_curve", lambda truth, scores, service, auc: reported.append(auc))
+    monkeypatch.setattr(evaluation, "plot_roc_curve", lambda truth, scores, service, auc, tags: reported.append(auc))
     monkeypatch.setattr(sys, "argv", ["hids-eval", "--service", "FLASK", "--eval-test-split"])
 
     eval_recordings.main()

@@ -82,6 +82,7 @@ def quick_test_evaluation(
     threshold: float,
     device: torch.device,
     service_name: str,
+    roc_tags: tuple[str, ...],
 ) -> None:
     model.eval()
     steps_parts: list[torch.Tensor] = []
@@ -109,7 +110,7 @@ def quick_test_evaluation(
     if len(set(truth)) == 2:
         auc = roc_auc_score(truth, window_scores)
         print(f"Площа під ROC-кривою (ROC-AUC): {auc:.4f}")
-        plot_roc_curve(truth, window_scores, service_name, auc)
+        plot_roc_curve(truth, window_scores, service_name, auc, roc_tags)
     else:
         print("У test-спліті присутній тільки один клас вікон — ROC-AUC не рахується")
 
@@ -120,6 +121,7 @@ def calibrate_and_evaluate(
     val_loader: DataLoader,
     test_loader: DataLoader | None,
     device: torch.device,
+    roc_tags: tuple[str, ...],
     epoch_label: str | None = None,
 ) -> float:
     threshold = calibrate_threshold(model, val_loader, device)
@@ -127,5 +129,5 @@ def calibrate_and_evaluate(
     print(f"{prefix} поріг тривоги (nll, {config.THRESHOLD_PERCENTILE}-й перцентиль val): {threshold:.4f}")
     if test_loader is not None:
         print(f"{prefix} diagnostics-оцінка на test-спліті:")
-        quick_test_evaluation(model, test_loader, threshold, device, service_name)
+        quick_test_evaluation(model, test_loader, threshold, device, service_name, roc_tags)
     return threshold

@@ -81,8 +81,8 @@ def plot_file_timeline(
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
-def plot_roc_curve(truth: list[bool], scores: list[float], service_name: str, auc: float) -> None:
-    """Побудова та збереження ROC-кривої."""
+def plot_roc_curve(truth: list[bool], scores: list[float], service_name: str, auc: float, tags: tuple[str, ...]) -> None:
+    """Побудова ROC-кривої; зберігається в config.PLOTS_DIR як <сервіс>_roc_<тег>.png для кожного тегу."""
     from sklearn.metrics import roc_curve
 
     fpr, tpr, _ = roc_curve(truth, scores)
@@ -97,7 +97,9 @@ def plot_roc_curve(truth: list[bool], scores: list[float], service_name: str, au
     plt.grid(True)
     plt.tight_layout()
 
-    path = f"roc_curve_{service_name}.png"
-    plt.savefig(path, dpi=150)
+    os.makedirs(config.PLOTS_DIR, exist_ok=True)
+    for tag in tags:
+        path = os.path.join(config.PLOTS_DIR, f"{service_name}_roc_{tag}.png")
+        plt.savefig(path, dpi=150)
+        print(f"[{service_name}] ROC-криву збережено у {path}")
     plt.close()
-    print(f"[{service_name}] ROC-криву збережено у {path}")

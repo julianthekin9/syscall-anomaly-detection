@@ -210,8 +210,10 @@ def train_one_service(service_name: str, device: torch.device) -> None:
         resource_guard.check_ram(f"{service_name}: кінець епохи {epoch_num}")
 
         if config.EVAL_TEST_EVERY_EPOCH or is_last_epoch:
+            # остання епоха — це і є підсумкова модель, тож її ROC-крива зберігається ще й як "final"
+            roc_tags = (f"epoch{epoch_num:03d}",) + (("final",) if is_last_epoch else ())
             threshold = calibrate_and_evaluate(
-                service_name, model, val_loader, test_loader, device,
+                service_name, model, val_loader, test_loader, device, roc_tags,
                 epoch_label=f"епоха {epoch_num}/{config.EPOCHS}",
             )
 
@@ -227,7 +229,7 @@ def train_one_service(service_name: str, device: torch.device) -> None:
             print(f"[{service_name}] графік метрик за епохами збережено у {plot_path}")
 
     if threshold is None:
-        threshold = calibrate_and_evaluate(service_name, model, val_loader, test_loader, device)
+        threshold = calibrate_and_evaluate(service_name, model, val_loader, test_loader, device, ("final",))
 
     os.makedirs(config.MODEL_DIR, exist_ok=True)
     torch.save(
