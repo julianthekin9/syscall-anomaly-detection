@@ -18,10 +18,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-testbed = [
-    "flask",
-    "requests",
-]
 dev = [
     "pytest",
 ]

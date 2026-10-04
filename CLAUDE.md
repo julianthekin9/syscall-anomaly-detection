@@ -1,6 +1,6 @@
 # HIDS: LSTM-детектор аномалий системных вызовов Linux
 
-Дипломный проект. Host-based IDS: LSTM обучается только на нормальном поведении и предсказывает следующий syscall; аномалия = высокий NLL. Мониторится Flask-приложение в Docker, живой сбор трасс через eBPF/BCC. Основной датасет: LID-DS 2021 (сценарии Apache Tomcat CVE).
+Дипломный проект. Host-based IDS: LSTM обучается только на нормальном поведении и предсказывает следующий syscall; аномалия = высокий NLL. Живой сбор трасс из Docker-контейнера через eBPF/BCC. Основной датасет: LID-DS 2021 (сценарии Apache Tomcat CVE).
 
 ## Язык
 - Отвечай мне на русском.
@@ -19,7 +19,6 @@
 - `syscall_hids/collectors/`: `ebpf.py` (`EbpfSession`, `Collector`, `RealTimeCollector`), `sudo.py`.
 - `syscall_hids/cli/`: точки входа `run_train.py` (`hids-train`), `eval_recordings.py` (`hids-eval`), `detect_live.py` (`hids-detect`, живая детекция поверх eBPF).
 - `tests/`: `test_regression.py` сверяет оконные скоры и AUC с эталоном из кода до переезда (`tests/golden/`).
-- `flask_app/`: тестовый стенд (Flask-приложение, Docker, сценарии трафика, сбор датасета).
 - `experiments/lid_ds/convert.py`: самостоятельный конвертер LID-DS 2021 в нативный формат (stdlib, без импорта проекта). Логику, специфичную для LID-DS, держать только там. Подробности в `experiments/lid_ds/README.MD`.
 
 ## Текущая архитектура (стабильна, не менять без явной просьбы)
@@ -43,7 +42,7 @@
 - Новую функциональность, которая усложнила бы ядро, выноси в отдельный самостоятельный скрипт.
 - Мёртвый код удаляй (неиспользуемые импорты, константы, fallback-ветки), а не прячь за флагами.
 - После правок кратко перечисли: что изменено (файл, функция) и что намеренно не тронуто.
-- eBPF-код требует root. Не запускай `sudo`, eBPF-сбор и `flask_app/collect_*.py` сам: дай мне команду, я запущу.
+- eBPF-код требует root. Не запускай `sudo`, eBPF-сбор и `hids-detect` сам: дай мне команду, я запущу.
 - Не читай целиком сырые трассы LID-DS: они огромные. Если нужен формат, смотри `head` одного файла.
 
 ## Команды
@@ -53,5 +52,5 @@
 - Параметры запуска: правка `syscall_hids/config.yaml`
 - Обучение: `hids-train` (или `hids-train --service <сценарий>`)
 - Оффлайн-оценка: `hids-eval --service <сценарий> --log <файл.sc>`
-- Realtime (root): `sudo hids-detect --service <сценарий> --container flask-app`
+- Realtime (root): `sudo hids-detect --service <сценарий> --container <контейнер>`
 - Тесты: `pytest tests/`
