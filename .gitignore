@@ -135,3 +135,5 @@ ApachePHP_training.txt
 
 # Claude Code: спільні налаштування проєкту в git (інакше їх сховає *.json)
 !.claude/settings.json
+
+*.gz
