@@ -27,9 +27,10 @@
 - результаты: `/content/drive/MyDrive/ids/runs` (Google Drive, переживают перезапуск VM).
 
 ## Правила
-1. **Подготовка VM**, если её ещё не было в этой сессии. Клон приватного репозитория делаю я. Если `/content/repo` нет, скажи мне.
+1. **Подготовка VM**, если её ещё не было в этой сессии. Репозиторий публичный: если `/content/repo` нет, клонируй его сам.
    ```bash
    wsl bash -lc "ssh colab-ids bash -s" <<'EOF'
+   test -d /content/repo || git clone -q https://github.com/julianthekin9/syscall-anomaly-detection.git /content/repo
    cd /content/repo && git fetch -q && git checkout -q main && git pull -q && pip install -q -e . && git rev-parse HEAD
    test -d /content/data/PHP_CWE-434 || (mkdir -p /content/data && tar -xzf /content/drive/MyDrive/ids/datasets/PHP_CWE-434.tar.gz -C /content/data)
    python -c "import torch; print('cuda', torch.cuda.is_available())"
