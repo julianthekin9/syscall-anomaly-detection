@@ -7,11 +7,14 @@
       "Bash(pytest:*)",
       "Bash(git status)",
       "Bash(git diff:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(wsl bash -lc:*)"
     ],
     "ask": [
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(wsl bash -lc \"colab new:*)",
+      "Bash(wsl bash -lc \"colab stop:*)"
     ],
     "deny": [
       "Bash(sudo:*)",

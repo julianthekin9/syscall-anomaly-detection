@@ -39,7 +39,7 @@ window_agg_quantile: 0.90    # used only if window_agg=quantile
 threshold_percentile: 99.0
 
 # --- Evaluation ---
-eval_test_every_epoch: true
+eval_test_every_epoch: false
 metrics_eval_every_n_epochs: 1
 train_metrics_max_batches: null  # null: train metrics over all batches
 
