@@ -30,7 +30,7 @@
 1. **Подготовка VM**, если её ещё не было в этой сессии. Клон приватного репозитория делаю я. Если `/content/repo` нет, скажи мне.
    ```bash
    wsl bash -lc "ssh colab-ids bash -s" <<'EOF'
-   cd /content/repo && git fetch -q && git checkout -q restructure && git pull -q && pip install -q -e . && git rev-parse HEAD
+   cd /content/repo && git fetch -q && git checkout -q main && git pull -q && pip install -q -e . && git rev-parse HEAD
    test -d /content/data/PHP_CWE-434 || (mkdir -p /content/data && tar -xzf /content/drive/MyDrive/ids/datasets/PHP_CWE-434.tar.gz -C /content/data)
    python -c "import torch; print('cuda', torch.cuda.is_available())"
    EOF
