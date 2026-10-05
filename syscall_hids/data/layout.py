@@ -3,7 +3,7 @@ from typing import Literal
 
 from syscall_hids.data.format import RECORDING_EXTENSION
 
-# Розкладка датасету (не параметри експерименту)
+# Dataset layout (not experiment parameters)
 TRAIN_SUBDIR = "training"
 VAL_SUBDIR = "validation"
 TEST_SUBDIR = "test"
@@ -28,7 +28,7 @@ def _root_is_single_service(dataset_root: str) -> bool:
 def list_services(dataset_root: str, services: list[str] | None) -> list[str]:
     root = Path(dataset_root)
     if not root.exists():
-        raise FileNotFoundError(f"Не найдена dataset_root={root} — проверьте --dataset_root.")
+        raise FileNotFoundError(f"dataset_root={root} not found, check --dataset_root.")
 
     if _root_is_single_service(dataset_root):
         names = [root.name]
@@ -51,10 +51,10 @@ def recording_files(service_name: str, split: Split, dataset_root: str) -> list[
     split_dir = _split_dir(service_name, split, dataset_root)
     if not split_dir.exists():
         raise FileNotFoundError(
-            f"Не найдена папка сплита {split_dir} — проверьте {split.upper()}_SUBDIR "
-            f"на соответствие реальной структуре датасета (ожидается либо "
-            f"dataset_root/<сценарий>/<{split}-подпапка>, либо, если dataset_root "
-            f"уже указывает на папку одного сценария, dataset_root/<{split}-подпапка>)."
+            f"Split directory {split_dir} not found, check that {split.upper()}_SUBDIR "
+            f"matches the actual dataset structure (expected either "
+            f"dataset_root/<scenario>/<{split}-subdir>, or, if dataset_root "
+            f"already points to a single scenario directory, dataset_root/<{split}-subdir>)."
         )
     return sorted(split_dir.rglob(f"*{RECORDING_EXTENSION}"))
 

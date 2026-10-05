@@ -1,14 +1,17 @@
 # Этап 3. Конфиг в YAML + CLI с переопределением (как в mace-torch)
 
-Задание для Claude Code. Выполняется после этапов 1 и 2. Предусловие: `tests/test_regression.py` существует и проходит. Если нет, остановись и скажи мне.
+Задание для Claude Code. Выполняется после этапа 2б (`docs/STAGE2B_FIXES.md`). Предусловие: `pytest tests/` зелёный, и в нём есть эталон мини-обучения (`tests/test_train_regression.py`). Если нет, остановись и скажи мне.
+
+## Исходное состояние (коммит cdf9d5b)
+Параметры уже вынесены в корневой `config.yaml`. `syscall_hids/config.py` читает его при импорте в атрибуты `config.X`, все ключи обязательны, и там же лежат константы формата трассы. YAML уже есть, но глобальный модуль `config` остался, а чтение файла при импорте зависит от текущей папки (в установленном пакете и в Colab это ломается).
 
 ## Цель
 
-1. `syscall_hids/config.py` (глобальный модуль) исчезает. Все параметры задаются через CLI-аргументы.
-2. `hids-train --config configs/flask.yaml` берёт параметры из YAML.
+1. `syscall_hids/config.py` (глобальный модуль) и чтение `config.yaml` при импорте исчезают. Все параметры задаются через CLI-аргументы.
+2. `hids-train --config configs/<эксперимент>.yaml` берёт параметры из YAML. Корневой `config.yaml` переезжает (`git mv`) в `configs/php_cwe_434.yaml` и становится обычным `--config`-файлом.
 3. Любой параметр можно переопределить в командной строке, и CLI сильнее YAML: `hids-train --config configs/flask.yaml --lr 5e-4 --max_num_epochs 20`.
 4. Приоритет: **CLI > YAML > значение по умолчанию в парсере**.
-5. Значения по умолчанию в парсере в точности равны текущим значениям `config.py`, поэтому `hids-train` без аргументов ведёт себя как сейчас. Регрессионный тест обязан остаться зелёным.
+5. Значения по умолчанию в парсере в точности равны текущим значениям из `config.yaml` (коммит cdf9d5b), поэтому `hids-train --config configs/php_cwe_434.yaml` ведёт себя как сейчас `hids-train`. Регрессионные тесты обязаны остаться зелёными без перегенерации эталона.
 
 ## Как это сделано в mace-torch (образец)
 
@@ -66,7 +69,8 @@ def run(args) -> None:
 ### Новые файлы
 - `syscall_hids/tools/arg_parser.py`: `build_default_arg_parser()` и `str2bool()` по образцу выше. Аргументы сгруппировать через `parser.add_argument_group(...)`: Данные, Признаки, Модель, Окна, Обучение, Скоринг и порог, Оценка, Директории, RAM.
 - `syscall_hids/tools/arg_parser_tools.py`: `check_args(args) -> (args, log_messages)`.
-- `configs/flask.yaml`: все параметры из таблицы ниже с ТЕКУЩИМИ значениями и короткими комментариями. Это рабочий пример и документация параметров одновременно.
+- `configs/php_cwe_434.yaml`: бывший корневой `config.yaml` (через `git mv`), ключи переименованы под аргументы, к каждому короткий комментарий.
+- `configs/flask.yaml`: параметры, с которыми обучена `models/FLASK.pt` (берутся из `hparams` чекпоинта; `dataset_root` указывает на FLASK-датасет, когда он будет).
 - `tests/test_arg_parser.py`:
   - без `--config` значения совпадают с таблицей;
   - YAML переопределяет значение по умолчанию;
@@ -83,46 +87,42 @@ def run(args) -> None:
 
 ### Таблица параметров
 
-| Было в config.py | Аргумент | По умолчанию | Примечание |
-|---|---|---|---|
-| DATASET_ROOT | `--dataset_root` | `./DATASET` | |
-| SERVICES | `--services` | `["FLASK"]` | `nargs="+"`; заменяет старый `--service` в `run_train` |
-| USE_ARG_COUNT_FEATURE | `--use_arg_count_feature` | `True` | str2bool |
-| ARG_COUNT_BUCKETS | `--arg_count_buckets` | `8` | |
-| FORCE_REBUILD_VOCAB | `--force_rebuild_vocab` | `False` | str2bool |
-| EMBED_DIM_SYSCALL | `--embed_dim_syscall` | `16` | |
-| EMBED_DIM_PROCESS | `--embed_dim_process` | `8` | |
-| EMBED_DIM_DIRECTION | `--embed_dim_direction` | `2` | |
-| EMBED_DIM_ARG_COUNT | `--embed_dim_arg_count` | `4` | |
-| HIDDEN_DIM | `--hidden_dim` | `128` | |
-| NUM_LAYERS | `--num_layers` | `2` | |
-| DROPOUT | `--dropout` | `0.2` | |
-| SEQ_LEN | `--seq_len` | `64` | |
-| SEQ_STEP | `--seq_step` | `32` | |
-| BATCH_SIZE | `--batch_size` | `32` | |
-| LEARNING_RATE | `--lr` | `1e-3` | |
-| EPOCHS | `--max_num_epochs` | `5` | |
-| RESUME | `--restart_latest` | `False` | str2bool |
-| WINDOW_AGG | `--window_agg` | `quantile` | `choices=["quantile", "max"]` |
-| WINDOW_AGG_QUANTILE | `--window_agg_quantile` | `0.90` | |
-| THRESHOLD_PERCENTILE | `--threshold_percentile` | `99.0` | |
-| EVAL_TEST_EVERY_EPOCH | `--eval_test_every_epoch` | `True` | str2bool |
-| METRICS_EVAL_EVERY_N_EPOCHS | `--metrics_eval_every_n_epochs` | `1` | |
-| TRAIN_METRICS_MAX_BATCHES | `--train_metrics_max_batches` | `None` | int или None |
-| — | `--work_dir` | `.` | новое, как в mace |
-| MODEL_DIR | `--model_dir` | `None` → `{work_dir}/models` | выводится в check_args |
-| PLOTS_DIR | `--plots_dir` | `None` → `{work_dir}/training_plots` | выводится в check_args |
-| VOCAB_DIR | `--vocab_dir` | `None` → `{work_dir}/vocabs` | выводится в check_args |
-| RAM_GUARD_ENABLED | `--ram_guard_enabled` | `True` | str2bool |
-| RAM_SOFT_LIMIT_PERCENT | `--ram_soft_limit_percent` | `80.0` | |
-| RAM_HARD_LIMIT_PERCENT | `--ram_hard_limit_percent` | `92.0` | |
-| RAM_THROTTLE_SLEEP_SEC | `--ram_throttle_sleep_sec` | `2.0` | |
-| RAM_CHECK_EVERY_N_RECORDINGS | `--ram_check_every_n_recordings` | `20` | |
+Значения по умолчанию НЕ берутся из этого документа: они равны значениям в `config.yaml` на коммите cdf9d5b. Если в `config.yaml` есть ключ, которого нет в таблице, он тоже становится аргументом с тем же правилом имени. Список таких ключей покажи в плане.
 
-При `work_dir="."` производные пути совпадают с текущими, и поведение не меняется.
+| Было | Аргумент | Примечание |
+|---|---|---|
+| dataset_root | `--dataset_root` | |
+| services | `--services` | `nargs="+"`; заменяет старый `--service` в `run_train` |
+| use_arg_count_feature | `--use_arg_count_feature` | str2bool |
+| arg_count_buckets | `--arg_count_buckets` | |
+| force_rebuild_vocab | `--force_rebuild_vocab` | str2bool |
+| embed_dim_syscall / _process / _direction / _arg_count | `--embed_dim_syscall` и т.д. | |
+| hidden_dim | `--hidden_dim` | |
+| num_layers | `--num_layers` | |
+| dropout | `--dropout` | |
+| seq_len | `--seq_len` | |
+| seq_step | `--seq_step` | |
+| batch_size | `--batch_size` | |
+| learning_rate | `--lr` | имя как в mace |
+| epochs | `--max_num_epochs` | имя как в mace |
+| resume | `--restart_latest` | str2bool, имя как в mace |
+| window_agg | `--window_agg` | `choices=["quantile", "max", "mean"]` |
+| window_agg_quantile | `--window_agg_quantile` | |
+| threshold_percentile | `--threshold_percentile` | |
+| eval_test_every_epoch | `--eval_test_every_epoch` | str2bool |
+| metrics_eval_every_n_epochs | `--metrics_eval_every_n_epochs` | |
+| train_metrics_max_batches | `--train_metrics_max_batches` | int или None |
+| — | `--work_dir` | новое, по умолчанию `.` |
+| model_dir | `--model_dir` | `None` → `{work_dir}/models` |
+| — | `--checkpoints_dir` | `None` → `{model_dir}/checkpoints` (чекпоинты эпох), как в mace |
+| plots_dir | `--plots_dir` | `None` → `{work_dir}/training_plots` |
+| vocab_dir | `--vocab_dir` | `None` → `{work_dir}/vocabs` |
+| ram_* | `--ram_guard_enabled`, `--ram_soft_limit_percent`, `--ram_hard_limit_percent`, `--ram_throttle_sleep_sec`, `--ram_check_every_n_recordings` | |
+
+При `work_dir="."` производные пути совпадают с текущими, и поведение не меняется. Если сейчас чекпоинты эпох пишутся не в `{model_dir}/checkpoints`, сохрани текущий путь как вывод по умолчанию и скажи мне.
 
 ### Что НЕ становится параметром
-Это описание формата данных, а не настройки эксперимента. Они остаются константами в коде:
+Это описание формата данных, а не настройки эксперимента. Сейчас они лежат в `config.py`; они остаются константами в коде:
 - `TIME_COLUMN_INDEX`, `PROCESS_NAME_COLUMN_INDEX`, `SYSCALL_COLUMN_INDEX`, `DIRECTION_COLUMN_INDEX`, `PARAMS_BEGIN_INDEX`, `MIN_RAW_FIELDS`, `RECORDING_EXTENSION` → `syscall_hids/data/format.py` (формат строки eBPF-коллектора);
 - `TRAIN_SUBDIR`, `VAL_SUBDIR`, `TEST_SUBDIR`, `TEST_NORMAL_SUBDIR`, `TEST_ABNORMAL_SUBDIR` → константы в `syscall_hids/data/layout.py`;
 - `ARCHITECTURE_VERSION` остаётся в `modules/models.py`.

@@ -1,4 +1,4 @@
-"""Логування, файл метрик, seed і git-коміт (за зразком mace/tools/utils.py)."""
+"""Logging, metrics file, seed and git commit (modelled on mace/tools/utils.py)."""
 
 import json
 import logging
@@ -10,8 +10,8 @@ import sys
 import numpy as np
 import torch
 
-# Позначка хендлерів, які додав setup_logger: їх знімаємо при повторному виклику,
-# чужі (наприклад, pytest caplog) не чіпаємо
+# Marker for handlers added by setup_logger: they are removed on a repeated call,
+# foreign ones (e.g. pytest caplog) are left alone
 _HANDLER_MARK = "_syscall_hids_handler"
 
 
@@ -25,10 +25,10 @@ def setup_logger(
     directory: str | None = None,
     append: bool = False,
 ) -> None:
-    """Кореневий логер: консоль і {directory}/{tag}.log на рівні level, {tag}_debug.log — усе з DEBUG.
+    """Root logger: console and {directory}/{tag}.log at level, {tag}_debug.log gets everything from DEBUG.
 
-    Ідемпотентна: повторний виклик (Colab/Jupyter) не дублює рядки.
-    append=True дописує файли (продовження навчання), інакше вони перезаписуються.
+    Idempotent: a repeated call (Colab/Jupyter) does not duplicate lines.
+    append=True appends to the files (resumed training), otherwise they are overwritten.
     """
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
@@ -71,8 +71,8 @@ class UniversalEncoder(json.JSONEncoder):
 
 
 class MetricsLogger:
-    """JSONL: один рядок = один словник. Файл відкривається на кожен запис, тож дані на диску
-    навіть якщо процес упав."""
+    """JSONL: one line = one dict. The file is opened for every write, so the data is on disk
+    even if the process crashes."""
 
     def __init__(self, directory: str, tag: str, append: bool = False) -> None:
         self.directory = directory
@@ -96,7 +96,7 @@ def set_seeds(seed: int) -> None:
 
 
 def get_git_commit() -> str:
-    """Хеш поточного коміту репозиторію, з якого імпортовано пакет; "None", якщо git недоступний."""
+    """Hash of the current commit of the repository the package is imported from; "None" if git is unavailable."""
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],

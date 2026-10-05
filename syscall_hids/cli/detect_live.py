@@ -47,14 +47,14 @@ def score_window(model, rows: list[list[int]], device: torch.device) -> float:
     with torch.no_grad():
         logits_syscall = model(x)
         step_scores = compute_step_scores(logits_syscall, y)
-    return step_scores  # [1, seq_len], аггрегируем снаружи (нужен window_agg из чекпоинта)
+    return step_scores  # [1, seq_len], aggregated by the caller (needs window_agg from the checkpoint)
 
 
 def main() -> None:
     parser = build_detect_arg_parser(description=__doc__)
     args, input_log_messages = check_args(parser.parse_args())
     for message, _ in input_log_messages:
-        print(f"УВАГА: {message}")
+        print(f"WARNING: {message}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -89,7 +89,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    print("Слідкую за syscall-потоком в реальному часі (Ctrl+C — остановить)...")
+    print("Watching the syscall stream in real time (Ctrl+C to stop)...")
     try:
         while True:
             time.sleep(args.scan_interval)
@@ -115,16 +115,16 @@ def main() -> None:
                     print(f"[{ts_label}] events={collector.event_counter:>8}  nll={score:.4f}{marker}")
 
             if args.duration and (time.time() - run_start) >= args.duration:
-                print(f"Досягнуто --duration={args.duration}с — зупиняюсь.")
+                print(f"Reached --duration={args.duration}s, stopping.")
                 break
     except KeyboardInterrupt:
-        print("\nЗупинено користувачем (Ctrl+C)")
+        print("\nStopped by user (Ctrl+C)")
     finally:
         session.detach_collector()
         session.close()
 
     if not history_scores:
-        print("Недостатньо подій для повного вікна.")
+        print("Not enough events for a full window.")
         return
 
     csv_path = out_dir / f"{args.service}_{run_id}_scores.csv"
@@ -133,7 +133,7 @@ def main() -> None:
         writer.writerow(["timestamp_unix", "nll", "alert"])
         for ts, score, alert in zip(history_ts, history_scores, history_alert):
             writer.writerow([f"{ts:.6f}", f"{score:.6f}", int(alert)])
-    print(f"Історію вікон збережено: {csv_path}")
+    print(f"Window history saved: {csv_path}")
 
     window_end_ts = np.array(history_ts, dtype=np.float64)
     scores = np.array(history_scores, dtype=np.float64)
@@ -142,10 +142,10 @@ def main() -> None:
     plot_file_timeline(
         f"{args.service} realtime ({run_id})", window_end_ts, scores, attack_start_sec, threshold, plot_path
     )
-    print(f"Графік збережено: {plot_path}")
+    print(f"Plot saved: {plot_path}")
 
     n_alerts = sum(history_alert)
-    print(f"Ітог: {len(history_scores)} вікон, {n_alerts} алертов ({100 * n_alerts / len(history_scores):.1f}%)")
+    print(f"Summary: {len(history_scores)} windows, {n_alerts} alerts ({100 * n_alerts / len(history_scores):.1f}%)")
 
 
 if __name__ == "__main__":

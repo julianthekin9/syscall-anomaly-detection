@@ -1,4 +1,4 @@
-"""Розбір аргументів: умовчання, YAML, пріоритет CLI > YAML > умовчання, check_args."""
+"""Argument parsing: defaults, YAML, priority CLI > YAML > defaults, check_args."""
 
 import os
 from pathlib import Path
@@ -8,7 +8,7 @@ import pytest
 from syscall_hids.tools.arg_parser import build_default_arg_parser, build_eval_arg_parser
 from syscall_hids.tools.arg_parser_tools import check_args
 
-# Колишній syscall_hids/config.yaml (ключі вже під іменами аргументів)
+# The former syscall_hids/config.yaml (keys already renamed to argument names)
 EXPECTED_DEFAULTS = {
     "dataset_root": "./DATASET_LIDDS",
     "services": ["PHP_CWE-434"],

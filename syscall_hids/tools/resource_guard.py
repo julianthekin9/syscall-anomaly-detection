@@ -7,9 +7,9 @@ import psutil
 
 _process = psutil.Process(os.getpid())
 
-# Єдиний дозволений модульний стан пакета. check_ram викликається глибоко в шарі даних,
-# тож налаштування задаються один раз через configure() у точці входу (run_train.run,
-# eval_recordings.main), а не протягуються через усі функції. До configure() охорона вимкнена.
+# The only allowed module-level state in the package. check_ram is called deep in the data layer,
+# so settings are set once via configure() at the entry point (run_train.run,
+# eval_recordings.main) instead of being passed through every function. The guard is off until configure().
 _enabled = False
 _soft_limit_percent = 100.0
 _hard_limit_percent = 100.0
@@ -25,7 +25,7 @@ def configure(enabled: bool, soft_limit_percent: float, hard_limit_percent: floa
 
 
 class RamLimitExceeded(MemoryError):
-    """Поднимается заблаговременно, до того как систему прибьёт OOM killer."""
+    """Raised in advance, before the OOM killer kills the process."""
 
 
 def ram_usage_percent() -> float:
@@ -44,17 +44,17 @@ def check_ram(context: str = "") -> None:
 
     if pct >= _hard_limit_percent:
         raise RamLimitExceeded(
-            f"RAM занята на {pct:.1f}% (жёсткий лимит ram_hard_limit_percent="
-            f"{_hard_limit_percent}%), RSS процесса={process_rss_gb():.2f} GB, "
-            f"контекст: {context or '?'}."
+            f"RAM usage at {pct:.1f}% (hard limit ram_hard_limit_percent="
+            f"{_hard_limit_percent}%), process RSS={process_rss_gb():.2f} GB, "
+            f"context: {context or '?'}."
         )
 
     if pct >= _soft_limit_percent:
         logging.warning(
-            f"[resource_guard] ВНИМАНИЕ: RAM {pct:.1f}% "
-            f"(мягкий лимит {_soft_limit_percent}%), "
-            f"RSS процесса={process_rss_gb():.2f} GB, контекст: {context or '?'} — "
-            f"gc.collect() + пауза {_throttle_sleep_sec}s"
+            f"[resource_guard] WARNING: RAM {pct:.1f}% "
+            f"(soft limit {_soft_limit_percent}%), "
+            f"process RSS={process_rss_gb():.2f} GB, context: {context or '?'}: "
+            f"gc.collect() + pause {_throttle_sleep_sec}s"
         )
         gc.collect()
         time.sleep(_throttle_sleep_sec)

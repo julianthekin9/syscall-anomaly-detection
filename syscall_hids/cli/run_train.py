@@ -29,7 +29,7 @@ def run(args) -> None:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"syscall_hids version: {syscall_hids.__version__}")
-    logging.info(f"Пристрій: {device}")
+    logging.info(f"Device: {device}")
     logging.debug(f"Configuration: {vars(args)}")
     git_commit = get_git_commit()
     logging.debug(f"Current Git commit: {git_commit}")
@@ -39,12 +39,12 @@ def run(args) -> None:
     )
 
     services = list_services(args.dataset_root, args.services)
-    logging.info(f"Сервіси: {services}")
+    logging.info(f"Services: {services}")
 
     for service_name in services:
         train_one_service(service_name, device, args, git_commit=git_commit)
         gc.collect()
-        resource_guard.check_ram(f"після сервісу {service_name}")
+        resource_guard.check_ram(f"after service {service_name}")
 
 
 if __name__ == "__main__":

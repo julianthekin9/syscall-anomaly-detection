@@ -1,10 +1,10 @@
-"""Регресія міні-навчання: train_one_service на датасеті FIXT дає те саме, що код до переїзду.
+"""Mini-training regression: train_one_service on the FIXT dataset gives the same result as the code before the move.
 
-Еталон (golden.json -> "train", FIXT.pt) знято tests/golden/make_golden.py --train зі
-старого коду з тими самими параметрами (golden.json -> "train" -> "config") і seed.
+The reference (golden.json -> "train", FIXT.pt) was produced by tests/golden/make_golden.py --train from the
+old code with the same parameters (golden.json -> "train" -> "config") and seed.
 
-На етапі 3 тест переписано під args; еталон (golden.json, FIXT.pt) НЕ перегенерувався.
-Параметри в еталоні записані старими іменами config, OLD_CONFIG_TO_ARG переводить їх в аргументи.
+At stage 3 the test was rewritten for args; the reference (golden.json, FIXT.pt) was NOT regenerated.
+Reference parameters use old config names; OLD_CONFIG_TO_ARG maps them to arguments.
 """
 
 import json
@@ -58,7 +58,7 @@ def _argv_from_golden_config(golden_config: dict) -> list[str]:
         if isinstance(value, list):
             argv += [flag, *map(str, value)]
         else:
-            argv += [flag, str(value)]  # True/False/None розбирають str2bool та int_or_none
+            argv += [flag, str(value)]  # True/False/None are parsed by str2bool and int_or_none
     return argv
 
 
@@ -88,7 +88,7 @@ def trained(golden: dict, tmp_path_factory) -> dict:
             args.ram_guard_enabled, args.ram_soft_limit_percent, args.ram_hard_limit_percent, args.ram_throttle_sleep_sec
         )
         mp.chdir(tmp)
-        # Метрики знімаються на вході функцій малювання, як і в make_golden.py
+        # Metrics are captured at the entry of the plotting functions, as in make_golden.py
         mp.setattr(train_module, "plot_training_curves", lambda service, h, plots_dir: history.update(h))
         mp.setattr(evaluation, "plot_roc_curve", lambda truth, scores, service, auc, tags, plots_dir: test_aucs.append(auc))
 
@@ -140,7 +140,7 @@ def test_state_dict_sum_and_norm(golden: dict, trained: dict) -> None:
 
 
 def test_reproducibility_artifacts(trained: dict) -> None:
-    """train_args у чекпоінті та {model_dir}/FIXT_config.yaml, який розбирається назад у ті самі args."""
+    """train_args in the checkpoint and {model_dir}/FIXT_config.yaml, which parses back into the same args."""
     args = trained["args"]
     assert trained["checkpoint"]["train_args"] == vars(args)
     config_path = Path(args.model_dir) / "FIXT_config.yaml"

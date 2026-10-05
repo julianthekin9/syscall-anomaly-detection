@@ -1,6 +1,6 @@
 """
 Usage:
-    hids-eval --service FLASK --log путь/к/логу.sc
+    hids-eval --service FLASK --log path/to/log.sc
     hids-eval --service FLASK --eval-test-split
     hids-eval --config configs/php_cwe_434.yaml --service PHP_CWE-434 --eval-test-split
 """
@@ -54,32 +54,32 @@ def score_log_file(
 
 
 def print_log_verdict(scores: list[float], threshold: float) -> None:
-    print(f"{len(scores)} окно(а), порог тревоги = {threshold:.4f}")
+    print(f"{len(scores)} window(s), alert threshold = {threshold:.4f}")
     alerts = 0
     for i, score in enumerate(scores, start=1):
-        marker = "  <-- АЛЕРТ" if score > threshold else ""
-        print(f"  окно {i}: anomaly_score={score:.4f}{marker}")
+        marker = "  <-- ALERT" if score > threshold else ""
+        print(f"  window {i}: anomaly_score={score:.4f}{marker}")
         if score > threshold:
             alerts += 1
 
     if alerts:
-        print(f"\nІТОГ: {alerts}/{len(scores)} окон превысили порог тревоги — підозріла активність")
+        print(f"\nSUMMARY: {alerts}/{len(scores)} windows exceeded the alert threshold, suspicious activity")
     else:
-        print(f"\nІТОГ: усі {len(scores)} вікон в межах норми.")
+        print(f"\nSUMMARY: all {len(scores)} windows are within normal range.")
 
 
 def main() -> None:
-    # quick_test_evaluation і plot_roc_curve пишуть через logging: виводимо в консоль як раніше
+    # quick_test_evaluation and plot_roc_curve write via logging: print to the console as before
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = build_eval_arg_parser(description=__doc__)
     args = parser.parse_args()
 
     if not args.log and not args.eval_test_split:
-        parser.error("Укажите --log <файл> или --eval-test-split")
+        parser.error("Specify --log <file> or --eval-test-split")
 
     args, input_log_messages = check_args(args)
     for message, _ in input_log_messages:
-        print(f"УВАГА: {message}")
+        print(f"WARNING: {message}")
     resource_guard.configure(
         args.ram_guard_enabled, args.ram_soft_limit_percent, args.ram_hard_limit_percent, args.ram_throttle_sleep_sec
     )
@@ -90,7 +90,7 @@ def main() -> None:
 
     if args.log:
         scores = score_log_file(model, checkpoint, args.log, device, args.batch_size)
-        print(f"Файл {args.log}:")
+        print(f"File {args.log}:")
         print_log_verdict(scores, threshold)
 
     if args.eval_test_split:
@@ -102,11 +102,11 @@ def main() -> None:
             args.dataset_root, use_arg_count_feature, arg_count_buckets, args.ram_check_every_n_recordings,
         )
         if len(X_test) == 0:
-            print(f"[{args.service}] test-сплит пуст или короче SEQ_LEN+1")
+            print(f"[{args.service}] test split is empty or shorter than SEQ_LEN+1")
             return
         test_loader = DataLoader(TestSequenceDataset(X_test, y_test, window_is_attack), batch_size=args.batch_size, shuffle=False)
-        print(f"\nОценка на test-сплите сервиса {args.service} ({len(X_test)} окон):")
-        # агрегація вікна — та, з якою модель калібрувалась (з чекпоінта), а не з аргументів
+        print(f"\nEvaluation on the test split of service {args.service} ({len(X_test)} windows):")
+        # window aggregation is the one the model was calibrated with (from the checkpoint), not from the arguments
         quick_test_evaluation(
             model, test_loader, threshold, device, args.service, ("eval",),
             checkpoint["window_agg"], checkpoint["window_agg_quantile"], args.plots_dir,

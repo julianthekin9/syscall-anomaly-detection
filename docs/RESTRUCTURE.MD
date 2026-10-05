@@ -71,7 +71,7 @@ syscall-anomaly-detection/
 
 ## Этапы
 
-### Этап 1. Пакет и перенос файлов (без изменения логики)
+### Этап 1. Пакет и перенос файлов (без изменения логики) — ГОТОВО (a51a258)
 1. Создать `pyproject.toml` (setuptools, `packages = find: include syscall_hids*`), зависимости только прямые: torch, numpy, scikit-learn, matplotlib, psutil. Extra `[testbed]`: flask, requests. BCC в зависимости не добавлять: он ставится системно (`apt install python3-bpfcc`), упомянуть это в README.
 2. Перенести код по таблице выше через `git mv` там, где файл переезжает целиком, чтобы сохранилась история.
 3. Заменить импорты на абсолютные: `from syscall_hids.data.sequences import make_sequences` и т.п. Модули, читающие `config`, импортируют `from syscall_hids import config`.
@@ -84,11 +84,17 @@ syscall-anomaly-detection/
 7. Проверка: `pip install -e .`, `python -c "import syscall_hids.cli.run_train, syscall_hids.cli.eval_recordings"`, `hids-train --help` (если есть argparse). Модули с `bcc` проверять импортом только если bcc установлен.
 8. В конце перечислить: какие файлы перенесены куда, какие импорты изменены, что не тронуто.
 
-### Этап 2. Регрессионный тест
+### Этап 2. Регрессионный тест — ГОТОВО (dd4716d), инференс
 `tests/test_regression.py`: на маленьком фиксированном наборе записей загрузить существующий чекпоинт и сравнить оконные скоры и AUC со значениями, сохранёнными ДО переезда (сохранить их скриптом из старого кода в `tests/golden/`). Совпадение до 1e-6. Пока тест не зелёный, дальше не идём.
 
-### Этап 3. Конфиг через аргументы и YAML (как `--config` в mace)
-`syscall_hids/tools/arg_parser.py`: argparse + загрузка YAML; значения по умолчанию берутся из `config.py`. Обсудить со мной ДО реализации, как передавать конфиг: явно аргументом в функции или через переопределение модуля `config`.
+### Этап 2б. Исправления и эталон мини-обучения
+Полное задание: `docs/STAGE2B_FIXES.md`. Исправить известные баги CLI, почистить корень, добавить регрессию обучения (без неё этап 3 не проверить).
+
+### Этап 3. Конфиг через YAML и CLI (как `--config` в mace)
+Полное задание: `docs/STAGE3_CONFIG.md`. Решение принято: параметры передаются явно через `args`, глобальный `config` удаляется.
+
+### Этап 3б. Логирование как в mace
+Полное задание: `docs/STAGE_LOGGING.md`.
 
 ### Этап 4. AnomalyDetector (аналог MACECalculator)
 `AnomalyDetector.load(path)` читает чекпоинт (в нём уже есть vocabs, hparams, seq_len, window_agg, порог); `score_rows(rows) -> float`; `is_anomaly(score) -> bool`. `detect_live.py` переводится на детектор, `encode_tail` переносится в детектор. Только после моего подтверждения.

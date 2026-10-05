@@ -1,4 +1,4 @@
-"""Логування навчання: файли логу й метрик, секції, JSONL, ідемпотентність setup_logger, графік із JSONL."""
+"""Training logging: log and metrics files, sections, JSONL, setup_logger idempotency, plot from JSONL."""
 
 import json
 import logging
@@ -25,7 +25,7 @@ def work_dir(tmp_path_factory) -> Path:
     try:
         run(args)
     finally:
-        setup_logger(directory=None)  # закрити файлові хендлери, щоб tmp можна було прибрати
+        setup_logger(directory=None)  # close file handlers so tmp can be cleaned up
     return work
 
 
@@ -64,7 +64,7 @@ def test_setup_logger_is_idempotent(tmp_path: Path) -> None:
     try:
         setup_logger(level="INFO", tag="dup", directory=str(tmp_path))
         setup_logger(level="INFO", tag="dup", directory=str(tmp_path))
-        logging.info("один рядок")
+        logging.info("one line")
     finally:
         setup_logger(directory=None)
-    assert (tmp_path / "dup.log").read_text(encoding="utf-8").count("один рядок") == 1
+    assert (tmp_path / "dup.log").read_text(encoding="utf-8").count("one line") == 1

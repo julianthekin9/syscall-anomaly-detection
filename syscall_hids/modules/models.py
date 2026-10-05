@@ -93,8 +93,8 @@ class SyscallLSTM(nn.Module):
         return model
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """x: [batch, seq_len, num_features] (порядок фич — self.feature_order).
-        Возвращает logits_syscall [batch, seq_len, vocab_syscall]."""
+        """x: [batch, seq_len, num_features] (feature order: self.feature_order).
+        Returns logits_syscall [batch, seq_len, vocab_syscall]."""
         embedded = [
             self.embeddings[name](x[:, :, i]) for i, name in enumerate(self.feature_order)
         ]

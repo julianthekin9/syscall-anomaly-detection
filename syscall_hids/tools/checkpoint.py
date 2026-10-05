@@ -16,5 +16,5 @@ def load_model(service_name: str, device: torch.device, model_dir: str) -> tuple
 
 
 def checkpoint_features(checkpoint: dict) -> tuple[bool, int]:
-    """(use_arg_count_feature, arg_count_buckets), з якими модель навчена: кодування має з ними збігатися."""
+    """(use_arg_count_feature, arg_count_buckets) the model was trained with: encoding must match them."""
     return checkpoint["hparams"]["use_arg_count_feature"], checkpoint["vocab_sizes"].get("arg_count", 0)

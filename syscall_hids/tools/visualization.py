@@ -12,7 +12,7 @@ import numpy as np
 
 def plot_training_curves(service_name: str, history: dict[str, list[float]], plots_dir: str) -> str | None:
     if not history.get("epoch", []):
-        logging.warning(f"[{service_name}] history порожня — графік не будую")
+        logging.warning(f"[{service_name}] history is empty, skipping plot")
         return None
 
     os.makedirs(plots_dir, exist_ok=True)
@@ -22,7 +22,7 @@ def plot_training_curves(service_name: str, history: dict[str, list[float]], plo
 
 
 def plot_from_results(results_path: str, out_path: str) -> str | None:
-    """Ті самі криві, що й plot_training_curves, але з файлу метрик JSONL (записи mode="eval")."""
+    """Same curves as plot_training_curves, but from a JSONL metrics file (mode="eval" records)."""
     by_epoch: dict[int, dict[str, float]] = {}
     with open(results_path, encoding="utf-8") as f:
         for line in f:
@@ -33,7 +33,7 @@ def plot_from_results(results_path: str, out_path: str) -> str | None:
                 metrics[f"{record['split']}_precision_syscall"] = record["precision"]
     epochs = sorted(by_epoch)
     if not epochs:
-        logging.warning(f"{results_path}: немає записів eval — графік не будую")
+        logging.warning(f"{results_path}: no eval records, skipping plot")
         return None
 
     history: dict[str, list[float]] = {"epoch": epochs}
@@ -49,19 +49,19 @@ def _draw_training_curves(history: dict[str, list[float]], out_path: str) -> Non
     fig, axes = plt.subplots(2, 1, figsize=(6, 8), squeeze=False)
 
     def _plot(ax, train_key: str, val_key: str, title: str, ylim01: bool = False) -> None:
-        ax.plot(epochs, history[train_key], marker="o", label="Навчальна вибірка")
-        ax.plot(epochs, history[val_key], marker="o", label="Валідаційна вибірка")
+        ax.plot(epochs, history[train_key], marker="o", label="Train")
+        ax.plot(epochs, history[val_key], marker="o", label="Validation")
         ax.set_title(title)
-        ax.set_xlabel("епоха")
+        ax.set_xlabel("epoch")
         if ylim01:
             ax.set_ylim(0, 1.02)
         ax.grid(alpha=0.3)
         ax.legend()
 
-    _plot(axes[0][0], "train_loss_syscall", "val_loss_syscall", "Функція втрат (Loss)")
-    _plot(axes[1][0], "train_precision_syscall", "val_precision_syscall", "Точність (Precision)", ylim01=True)
+    _plot(axes[0][0], "train_loss_syscall", "val_loss_syscall", "Loss")
+    _plot(axes[1][0], "train_precision_syscall", "val_precision_syscall", "Precision", ylim01=True)
 
-    fig.suptitle("Метрики по епохах")
+    fig.suptitle("Metrics per epoch")
     fig.tight_layout()
     fig.savefig(out_path, dpi=120)
     plt.close(fig)
@@ -87,21 +87,21 @@ def plot_file_timeline(
     ax.plot(rel_t, scores, "-", color="#888888", linewidth=1, zorder=1)
     ax.scatter(
         rel_t[~is_attack_window], scores[~is_attack_window],
-        color="#2563eb", label="Час нормальної поведінки", s=18, zorder=2,
+        color="#2563eb", label="Normal behaviour time", s=18, zorder=2,
     )
     if is_attack_window.any():
         ax.scatter(
             rel_t[is_attack_window], scores[is_attack_window],
-            color="#dc2626", label="Час аномальної поведінки", s=18, zorder=2,
+            color="#dc2626", label="Anomalous behaviour time", s=18, zorder=2,
         )
 
     ax.axhline(threshold, color="#16a34a", linestyle="--", linewidth=1.2, label=f"threshold = {threshold:.4f}")
     if attack_start_sec is not None:
-        ax.axvline(attack_start_sec - t0, color="#dc2626", linestyle=":", linewidth=1.5, label="Початок аномальної поведінки (info.json)")
+        ax.axvline(attack_start_sec - t0, color="#dc2626", linestyle=":", linewidth=1.5, label="Anomalous behaviour start (info.json)")
 
-    ax.set_xlabel("Час від початку запису, с")
+    ax.set_xlabel("Time since recording start, s")
     ax.set_ylabel("NLL (anomaly score)")
-    ax.set_title(f"{filename} — NLL по часовим меткам лога")
+    ax.set_title(f"{filename} — NLL over log timestamps")
     ax.legend(loc="upper left", fontsize=8)
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
@@ -110,7 +110,7 @@ def plot_file_timeline(
 def plot_roc_curve(
     truth: list[bool], scores: list[float], service_name: str, auc: float, tags: tuple[str, ...], plots_dir: str
 ) -> None:
-    """Побудова ROC-кривої; зберігається в plots_dir як <сервіс>_roc_<тег>.png для кожного тегу."""
+    """Plots the ROC curve; saved to plots_dir as <service>_roc_<tag>.png for each tag."""
     from sklearn.metrics import roc_curve
 
     fpr, tpr, _ = roc_curve(truth, scores)
@@ -120,7 +120,7 @@ def plot_roc_curve(
     plt.plot([0, 1], [0, 1], linestyle="--", label="Random classifier")
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
-    plt.title(f"ROC-крива — {service_name}")
+    plt.title(f"ROC curve: {service_name}")
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
@@ -129,5 +129,5 @@ def plot_roc_curve(
     for tag in tags:
         path = os.path.join(plots_dir, f"{service_name}_roc_{tag}.png")
         plt.savefig(path, dpi=150)
-        logging.debug(f"[{service_name}] ROC-криву збережено у {path}")
+        logging.debug(f"[{service_name}] ROC curve saved to {path}")
     plt.close()

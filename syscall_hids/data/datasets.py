@@ -9,7 +9,7 @@ class SequenceDataset(Dataset):
         self.X = np.asarray(X)
         self.y = np.asarray(y)
         if len(self.X) != len(self.y):
-            raise ValueError(f"X и y разной длины: {len(self.X)} vs {len(self.y)}")
+            raise ValueError(f"X and y have different lengths: {len(self.X)} vs {len(self.y)}")
 
     def __len__(self) -> int:
         return len(self.X)
@@ -27,7 +27,7 @@ class TestSequenceDataset(Dataset):
         self.y = np.asarray(y)
         self.window_is_attack = np.asarray(window_is_attack, dtype=bool)
         if not (len(self.X) == len(self.y) == len(self.window_is_attack)):
-            raise ValueError("X, y и window_is_attack должны быть одной длины")
+            raise ValueError("X, y and window_is_attack must have the same length")
 
     def __len__(self) -> int:
         return len(self.X)

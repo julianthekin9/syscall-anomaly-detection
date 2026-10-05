@@ -1,22 +1,22 @@
-"""Генерація еталонних значень для регресійних тестів (tests/README.md).
+"""Generates reference values for the regression tests (tests/README.md).
 
-Запускається проти СТАРОГО коду (до переїзду в пакет, коміт 3c9ffac), тому
-syscall_hids не імпортує. Старий код підключається через sys.path.
+Runs against the OLD code (before the move into the package, commit 3c9ffac), so it
+does not import syscall_hids. The old code is added via sys.path.
 
 Usage:
-    # один раз: фікстури інференсу — перші рядки кількох записів test-спліту
+    # once: inference fixtures, the first lines of several test split recordings
     python tests/golden/make_golden.py --make-fixtures DATASET_LIDDS/PHP_CWE-434/test
-    # один раз: міні-датасет FIXT для еталону навчання
+    # once: the FIXT mini-dataset for the training reference
     python tests/golden/make_golden.py --make-fixt DATASET_LIDDS/PHP_CWE-434
 
     git worktree add ../old 3c9ffac
-    # еталонні скори інференсу на FLASK.pt
+    # reference inference scores on FLASK.pt
     python tests/golden/make_golden.py --old-code ../old
-    # еталон міні-навчання на FIXT (+ FIXT.pt та скори інференсу на ньому)
+    # mini-training reference on FIXT (+ FIXT.pt and inference scores on it)
     python tests/golden/make_golden.py --old-code ../old --train
     git worktree remove ../old
 
-Кожен режим оновлює лише свої ключі в golden.json.
+Each mode updates only its own keys in golden.json.
 """
 
 import argparse
@@ -39,10 +39,10 @@ OLD_CODE_COMMIT = "3c9ffac"
 
 FIXT = "FIXT"
 FIXT_DIR = DATA_DIR / FIXT
-# Скільки записів (по LINES_PER_FILE рядків) береться в train/val міні-датасету
+# How many recordings (LINES_PER_FILE lines each) go into the mini-dataset train/val
 FIXT_SPLIT_FILES = {"training": 3, "validation": 2}
-# Усі параметри config, від яких залежить навчання, задаються явно: еталон не
-# залежить від умовчань ні старого, ні нового коду. Тест бере їх із golden.json.
+# All config parameters that training depends on are set explicitly: the reference does not
+# depend on the defaults of either the old or the new code. The test takes them from golden.json.
 FIXT_CONFIG = {
     "SERVICES": [FIXT],
     "USE_ARG_COUNT_FEATURE": True,
@@ -84,7 +84,7 @@ def _update_golden(**keys) -> None:
 
 
 def make_fixtures(src: Path) -> None:
-    """Перші LINES_PER_FILE рядків перших FILES_PER_GROUP записів кожної групи."""
+    """First LINES_PER_FILE lines of the first FILES_PER_GROUP recordings of each group."""
     for group in GROUPS:
         out = DATA_DIR / group
         out.mkdir(parents=True, exist_ok=True)
@@ -94,7 +94,7 @@ def make_fixtures(src: Path) -> None:
 
 
 def make_fixt(scenario_dir: Path) -> None:
-    """Міні-датасет FIXT: train/val з нормальних записів сценарію, test — копія фікстур інференсу."""
+    """FIXT mini-dataset: train/val from normal scenario recordings, test is a copy of the inference fixtures."""
     for split, n in FIXT_SPLIT_FILES.items():
         out = FIXT_DIR / split
         out.mkdir(parents=True, exist_ok=True)
@@ -109,9 +109,9 @@ def make_fixt(scenario_dir: Path) -> None:
 def _import_old_code(old_code: Path):
     sys.path.insert(0, str(old_code.resolve()))
     import config
-    # У коміті 3c9ffac стоїть DATASET_FORMAT="lid_ds" (парсер 8-колонкового LID-DS).
-    # Пакет syscall_hids відповідає гілці "generic" (data.py), тож еталон рахується в ній;
-    # встановлюється до імпорту predict/train, бо вони обирають парсер під час імпорту.
+    # Commit 3c9ffac has DATASET_FORMAT="lid_ds" (the 8-column LID-DS parser).
+    # The syscall_hids package corresponds to the "generic" branch (data.py), so the reference is computed there;
+    # it is set before importing predict/train because they choose the parser at import time.
     config.DATASET_FORMAT = "generic"
     return config
 
@@ -147,7 +147,7 @@ def make_golden(old_code: Path) -> None:
 
     res = _score_files(score_log_file, model, checkpoint, _group_files(DATA_DIR), device)
     _update_golden(old_code_commit=OLD_CODE_COMMIT, **res)
-    print(f"FLASK: {sum(map(len, res['scores'].values()))} вікон, AUC={res['auc']:.6f} -> {GOLDEN_JSON}")
+    print(f"FLASK: {sum(map(len, res['scores'].values()))} windows, AUC={res['auc']:.6f} -> {GOLDEN_JSON}")
 
 
 def make_train_golden(old_code: Path) -> None:
@@ -163,7 +163,7 @@ def make_train_golden(old_code: Path) -> None:
     device = torch.device("cpu")
     history: dict = {}
     test_aucs: list[float] = []
-    # Метрики знімаються на вході функцій малювання; картинки не пишуться
+    # Metrics are captured at the entry of the plotting functions; no images are written
     train.plot_training_curves = lambda service, h: history.update(h)
     train.plot_roc_curve = lambda *a: test_aucs.append(a[3])
 
@@ -207,8 +207,8 @@ def make_train_golden(old_code: Path) -> None:
     fixt_inference = _score_files(score_log_file, model, checkpoint, _group_files(FIXT_DIR / "test"), device)
 
     _update_golden(old_code_commit=OLD_CODE_COMMIT, train=golden_train, fixt_inference=fixt_inference)
-    print(f"FIXT: поріг={golden_train['threshold']:.6f}, AUC по епохах={test_aucs}, "
-          f"інференс FIXT.pt AUC={fixt_inference['auc']:.6f} -> {GOLDEN_JSON}")
+    print(f"FIXT: threshold={golden_train['threshold']:.6f}, AUC per epoch={test_aucs}, "
+          f"FIXT.pt inference AUC={fixt_inference['auc']:.6f} -> {GOLDEN_JSON}")
 
 
 def main() -> None:
@@ -217,7 +217,7 @@ def main() -> None:
     group.add_argument("--make-fixtures", type=Path, metavar="TEST_SPLIT_DIR")
     group.add_argument("--make-fixt", type=Path, metavar="SCENARIO_DIR")
     group.add_argument("--old-code", type=Path, metavar="OLD_CODE_DIR")
-    parser.add_argument("--train", action="store_true", help="З --old-code: еталон міні-навчання на FIXT")
+    parser.add_argument("--train", action="store_true", help="With --old-code: mini-training reference on FIXT")
     args = parser.parse_args()
     if args.make_fixtures:
         make_fixtures(args.make_fixtures)

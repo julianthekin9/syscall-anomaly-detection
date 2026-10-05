@@ -59,7 +59,7 @@ def resolve_pid(container: str | None) -> int | None:
         ).strip()
         return int(output)
     except (subprocess.CalledProcessError, ValueError) as exc:
-        print(f"Не удалось получить PID контейнера {container!r}: {exc}", file=sys.stderr)
+        print(f"Failed to get PID of container {container!r}: {exc}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -193,7 +193,7 @@ class RealTimeCollector:
 
         name = syscall_name(self.syscall_table, event.syscall_id)
         if name == "switch":
-            return  # как и data.read_recording() при чтении .sc-файлов — эти события не участвуют в обучении/инференсе
+            return  # same as data.read_recording() when reading .sc files: these events are not used in training/inference
 
         process_name = event.comm.decode("utf-8", errors="replace")
         is_enter = event.direction == 0
@@ -212,7 +212,7 @@ class RealTimeCollector:
             self._buffer.append(raw)
 
     def snapshot_tail(self, n: int) -> list[RawEvent] | None:
-        """Последние n событий буфера, или None, если их пока меньше n."""
+        """Last n events of the buffer, or None if there are fewer than n so far."""
         with self._lock:
             if len(self._buffer) < n:
                 return None
@@ -223,25 +223,25 @@ class RealTimeCollector:
             return len(self._buffer)
 
     def close(self) -> None:
-        pass  # на диске ничего не открыто — метод для симметрии с Collector.close()
+        pass  # nothing is open on disk; the method exists for symmetry with Collector.close()
 
 
 class EbpfSession:
 
     def __init__(self, container: str | None = None, pid: int | None = None) -> None:
         if os.geteuid() != 0:
-            print("Нужен root (или CAP_SYS_ADMIN) для загрузки eBPF-программы", file=sys.stderr)
+            print("Root (or CAP_SYS_ADMIN) is required to load the eBPF program", file=sys.stderr)
             sys.exit(1)
 
         self.pid = pid if pid is not None else resolve_pid(container)
         self.cgroup_id = get_cgroup_id(self.pid) if self.pid is not None else 0
         if self.pid is not None:
-            print(f"Фильтр по PID={self.pid}, cgroup_id={self.cgroup_id}")
+            print(f"Filtering by PID={self.pid}, cgroup_id={self.cgroup_id}")
         else:
-            print("Фильтр не задан — трассируются syscall'ы ВСЕХ процессов в системе")
+            print("No filter set: tracing syscalls of ALL processes in the system")
 
         self.syscall_table = build_syscall_table()
-        print(f"Загружена таблица из {len(self.syscall_table)} syscall-ов")
+        print(f"Loaded a table of {len(self.syscall_table)} syscalls")
 
         self.bpf = BPF(text=BPF_PROGRAM)
         self.bpf["cgroup_filter"][ct.c_int(0)] = ct.c_uint64(self.cgroup_id)
@@ -271,13 +271,13 @@ class EbpfSession:
         with self._lock:
             self._current_collector = collector
         try:
-            print(f"Пишу лог в {output_path}")
+            print(f"Writing log to {output_path}")
             yield collector
         finally:
             with self._lock:
                 self._current_collector = None
             collector.close()
-            print(f"Готово: {output_path}, событий: {collector.event_counter}")
+            print(f"Done: {output_path}, events: {collector.event_counter}")
 
     def attach_collector(self, collector: "Collector | RealTimeCollector") -> None:
         with self._lock:
@@ -291,7 +291,7 @@ class EbpfSession:
         self.pid = resolve_pid(container)
         self.cgroup_id = get_cgroup_id(self.pid) if self.pid is not None else 0
         self.bpf["cgroup_filter"][ct.c_int(0)] = ct.c_uint64(self.cgroup_id)
-        print(f"cgroup обновлён: PID={self.pid}, cgroup_id={self.cgroup_id}")
+        print(f"cgroup updated: PID={self.pid}, cgroup_id={self.cgroup_id}")
 
     def close(self) -> None:
         self._stop_event.set()

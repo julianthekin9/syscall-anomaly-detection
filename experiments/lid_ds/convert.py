@@ -1,23 +1,23 @@
-"""Конвертер LID-DS 2021 -> нативний формат проєкту.
+"""LID-DS 2021 -> native project format converter.
 
-Самостійний скрипт: не імпортує syscall_hids, лише stdlib.
+Standalone script: does not import syscall_hids, stdlib only.
 
-Вхід:  zip-архів сценарію (як його віддає LID-DS) або тека з розпакованими сценаріями;
-       всередині <сценарій>/{training,validation,test}/**/*.zip,
-       кожен zip-запис містить <ім'я>.sc (8 колонок sysdig) та <ім'я>.json (метадані).
-       Теки __MACOSX і файли "._*" ігноруються.
-Вихід: <OUT>/<сценарій>/training/*.sc
-       <OUT>/<сценарій>/validation/*.sc
-       <OUT>/<сценарій>/test/normal/*.sc
-       <OUT>/<сценарій>/test/abnormal/*.sc
-       <OUT>/<сценарій>/manifest.json
+Input:  a scenario zip archive (as shipped by LID-DS) or a directory with unpacked scenarios;
+        containing <scenario>/{training,validation,test}/**/*.zip,
+        each recording zip holds <name>.sc (8 sysdig columns) and <name>.json (metadata).
+        __MACOSX directories and "._*" files are ignored.
+Output: <OUT>/<scenario>/training/*.sc
+        <OUT>/<scenario>/validation/*.sc
+        <OUT>/<scenario>/test/normal/*.sc
+        <OUT>/<scenario>/test/abnormal/*.sc
+        <OUT>/<scenario>/manifest.json
 
-Формат рядка на виході (як у eBPF-колектора): "ts_ns process syscall dir params".
+Output line format (same as the eBPF collector): "ts_ns process syscall dir params".
 
-Атакуючі записи: у test/abnormal пишеться лише сегмент від моменту першого
-експлойту (time.exploit[].absolute) до кінця запису — один файл на запис.
-Частина атакуючого запису до експлойту відкидається. У test/normal потрапляють
-лише записи з теки test/normal LID-DS без експлойту.
+Attack recordings: test/abnormal receives only the segment from the first
+exploit (time.exploit[].absolute) to the end of the recording, one file per recording.
+The part of an attack recording before the exploit is dropped. test/normal receives
+only exploit-free recordings from the LID-DS test/normal directory.
 """
 
 import argparse
@@ -35,21 +35,21 @@ SPLITS = ("training", "validation", "test")
 
 
 class Recording(NamedTuple):
-    """Один zip-запис LID-DS незалежно від того, звідки він узявся (тека чи архів сценарію)."""
+    """One LID-DS recording zip, regardless of its origin (directory or scenario archive)."""
     scenario: str
     split: str
     name: str
-    folder: str  # тека, в якій лежить zip (у test: normal або normal_and_attack)
-    source: str  # для manifest.json
+    folder: str  # directory containing the zip (in test: normal or normal_and_attack)
+    source: str  # for manifest.json
     open: Callable[[], zipfile.ZipFile]
 
-# Колонки LID-DS 2021 (dataloader/syscall_2021.py)
+# LID-DS 2021 columns (dataloader/syscall_2021.py)
 LID_TS, LID_PROCESS, LID_SYSCALL, LID_DIRECTION, LID_PARAMS = 0, 3, 5, 6, 7
 LID_MAX_SPLIT = 7
 
 
 def convert_line(raw: str) -> tuple[int, str] | None:
-    """Рядок LID-DS -> (ts_ns, рядок нативного формату). None для пошкоджених рядків."""
+    """LID-DS line -> (ts_ns, native-format line). None for malformed lines."""
     fields = raw.rstrip("\n").split(" ", LID_MAX_SPLIT)
     if len(fields) <= LID_DIRECTION:
         return None
@@ -70,7 +70,7 @@ def read_metadata(zf: zipfile.ZipFile) -> dict:
 
 
 def exploit_start_ns(meta: dict) -> int | None:
-    """Найраніший момент експлойту в наносекундах або None для нормального запису."""
+    """Earliest exploit time in nanoseconds, or None for a normal recording."""
     if not meta.get("exploit"):
         return None
     times = [e["absolute"] for e in meta.get("time", {}).get("exploit", []) if "absolute" in e]
@@ -80,16 +80,16 @@ def exploit_start_ns(meta: dict) -> int | None:
 
 
 def _is_junk(path_parts: list[str]) -> bool:
-    """Службові файли macOS: тека __MACOSX та AppleDouble-файли "._*"."""
+    """macOS service files: the __MACOSX directory and AppleDouble "._*" files."""
     return "__MACOSX" in path_parts or path_parts[-1].startswith("._")
 
 
 def _scan_dir(root: Path) -> list[Recording]:
-    """Тека з розпакованими сценаріями: <root>/<сценарій>/{training,validation,test}/**/*.zip."""
+    """Directory with unpacked scenarios: <root>/<scenario>/{training,validation,test}/**/*.zip."""
     found: list[Recording] = []
     for scenario_dir in sorted(d for d in root.iterdir() if (d / "training").is_dir()):
         for split in SPLITS:
-            # test у LID-DS 2021 розбитий на test/normal і test/normal_and_attack, тому rglob
+            # in LID-DS 2021 test is split into test/normal and test/normal_and_attack, hence rglob
             for zp in sorted((scenario_dir / split).rglob("*.zip")):
                 if _is_junk(list(zp.parts)):
                     continue
@@ -101,10 +101,10 @@ def _scan_dir(root: Path) -> list[Recording]:
 
 
 def _scan_archive(archive: zipfile.ZipFile, archive_path: Path) -> list[Recording]:
-    """Zip-архив сценарію, як його віддає LID-DS: <сценарій>/{training,validation,test}/**/*.zip.
+    """Scenario zip archive as shipped by LID-DS: <scenario>/{training,validation,test}/**/*.zip.
 
-    Внутрішні zip-и записів читаються в пам'ять по одному (кілька МБ кожен),
-    на диск нічого не розпаковується."""
+    Inner recording zips are read into memory one at a time (a few MB each),
+    nothing is extracted to disk."""
     found: list[Recording] = []
     for info in sorted(archive.infolist(), key=lambda i: i.filename):
         parts = info.filename.split("/")
@@ -122,7 +122,7 @@ def _scan_archive(archive: zipfile.ZipFile, archive_path: Path) -> list[Recordin
 
 
 def convert_recording(rec: Recording, out_dir: Path) -> dict:
-    """Конвертує один zip-запис потоково (без завантаження .sc у пам'ять)."""
+    """Converts one recording zip in streaming mode (without loading the .sc into memory)."""
     name, split = rec.name, rec.split
     info: dict = {"source": rec.source, "split": split}
 
@@ -167,14 +167,14 @@ def convert_recording(rec: Recording, out_dir: Path) -> dict:
                     elif ts_ns >= attack_ns:
                         key = "attack"
                     else:
-                        continue  # частина до експлойту не використовується
+                        continue  # the part before the exploit is not used
                     handles[key].write(line)
                     counts[key] += 1
         finally:
             for h in handles.values():
                 h.close()
 
-    # Порожні сегменти не залишаємо
+    # Do not keep empty segments
     for key, path in targets.items():
         if counts[key] == 0:
             path.unlink()
@@ -186,14 +186,14 @@ def convert_recording(rec: Recording, out_dir: Path) -> dict:
 
 
 def balance_test(out_dir: Path, records: list[dict], seed: int) -> dict:
-    """Вирівнює test за кількістю рядків: normal ≈ abnormal.
+    """Balances test by line count: normal ≈ abnormal.
 
-    Нормальні записи test/normal перемішуються з
-    фіксованим seed і проходяться жадібно: файл лишається, якщо з ним сума рядків
-    ближча до суми атакуючих рядків, ніж без нього, інакше видаляється з диска.
-    Записи не обрізаються, щоб кожен файл лишався природною сесією.
-    Видалені файли позначаються в манифесті полем "balanced_out" і відтворюються
-    повторною конвертацією з тим самим seed."""
+    Normal test/normal recordings are shuffled with a
+    fixed seed and traversed greedily: a file is kept if the line total with it is
+    closer to the attack line total than without it, otherwise it is deleted from disk.
+    Recordings are not truncated, so each file stays a natural session.
+    Deleted files are marked in the manifest with the "balanced_out" field and are reproduced
+    by re-running the conversion with the same seed."""
     test = [r for r in records if r.get("split") == "test"]
     target = sum(r.get("lines", {}).get("attack", 0) for r in test)
     normal = [r for r in test if "main" in r.get("outputs", {})]
@@ -203,7 +203,7 @@ def balance_test(out_dir: Path, records: list[dict], seed: int) -> dict:
     kept_lines = kept_files = 0
     for r in normal:
         n = r["lines"]["main"]
-        if kept_lines + n / 2 <= target:  # з файлом ближче до цілі, ніж без нього
+        if kept_lines + n / 2 <= target:  # closer to the target with the file than without it
             kept_lines += n
             kept_files += 1
         else:
@@ -228,11 +228,11 @@ def write_manifest(out_dir: Path, summary: dict) -> None:
 
 
 def rebalance_existing(scenario_dir: Path, seed: int) -> dict:
-    """Балансування вже сконвертованого сценарію за його manifest.json, без повторної конвертації."""
+    """Balances an already converted scenario using its manifest.json, without re-conversion."""
     with open(scenario_dir / "manifest.json", encoding="utf-8") as f:
         summary = json.load(f)
     if "test_balance" in summary:
-        sys.exit(f"{scenario_dir}: test уже збалансований ({summary['test_balance']})")
+        sys.exit(f"{scenario_dir}: test is already balanced ({summary['test_balance']})")
     summary["test_balance"] = balance_test(scenario_dir, summary["recordings"], seed)
     write_manifest(scenario_dir, summary)
     return summary
@@ -269,17 +269,17 @@ def convert_scenario(
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="LID-DS 2021 -> нативний формат проєкту")
+    p = argparse.ArgumentParser(description="LID-DS 2021 -> native project format")
     p.add_argument("inputs", type=Path, nargs="*",
-                   help="Zip-архіви сценаріїв LID-DS 2021 та/або теки з розпакованими сценаріями")
-    p.add_argument("--out", type=Path, help="Куди писати сконвертований датасет")
-    p.add_argument("--scenarios", nargs="*", default=None, help="Лише ці сценарії (за замовчуванням усі)")
-    p.add_argument("--limit", type=int, default=None, help="Не більше N записів на спліт (для швидкої перевірки)")
+                   help="LID-DS 2021 scenario zip archives and/or directories with unpacked scenarios")
+    p.add_argument("--out", type=Path, help="Where to write the converted dataset")
+    p.add_argument("--scenarios", nargs="*", default=None, help="Only these scenarios (default: all)")
+    p.add_argument("--limit", type=int, default=None, help="At most N recordings per split (for a quick check)")
     p.add_argument("--balance-test", action="store_true",
-                   help="Вирівняти test: сумарна кількість рядків normal ≈ abnormal (зайві normal-файли видаляються)")
-    p.add_argument("--seed", type=int, default=0, help="Seed для --balance-test та --rebalance")
+                   help="Balance test: total normal line count ≈ abnormal (surplus normal files are deleted)")
+    p.add_argument("--seed", type=int, default=0, help="Seed for --balance-test and --rebalance")
     p.add_argument("--rebalance", type=Path, nargs="+", metavar="SCENARIO_DIR",
-                   help="Збалансувати вже сконвертовані сценарії за їхнім manifest.json, без конвертації")
+                   help="Balance already converted scenarios using their manifest.json, without conversion")
     args = p.parse_args()
 
     if args.rebalance:
@@ -287,7 +287,7 @@ def main() -> None:
             print(f"{scenario_dir.name}: {rebalance_existing(scenario_dir, args.seed)['test_balance']}")
         return
     if not args.inputs or args.out is None:
-        p.error("потрібні вхідні архіви/теки та --out (або --rebalance)")
+        p.error("input archives/directories and --out are required (or --rebalance)")
 
     with ExitStack() as stack:
         recordings: list[Recording] = []
@@ -297,7 +297,7 @@ def main() -> None:
             elif zipfile.is_zipfile(src):
                 recordings += _scan_archive(stack.enter_context(zipfile.ZipFile(src)), src)
             else:
-                sys.exit(f"{src} — не тека і не zip-архів")
+                sys.exit(f"{src} is neither a directory nor a zip archive")
 
         by_scenario: dict[str, list[Recording]] = {}
         for rec in recordings:
@@ -305,7 +305,7 @@ def main() -> None:
         if args.scenarios:
             by_scenario = {k: v for k, v in by_scenario.items() if k in args.scenarios}
         if not by_scenario:
-            sys.exit(f"Не знайдено сценаріїв у {', '.join(map(str, args.inputs))}")
+            sys.exit(f"No scenarios found in {', '.join(map(str, args.inputs))}")
 
         for scenario, recs in sorted(by_scenario.items()):
             s = convert_scenario(

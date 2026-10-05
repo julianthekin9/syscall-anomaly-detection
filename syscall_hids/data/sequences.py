@@ -44,17 +44,17 @@ def make_sequences(rows: np.ndarray, seq_len: int, step: int) -> tuple[np.ndarra
     starts = list(range(0, n - needed + 1, step))
     last_start = starts[-1] if starts else 0
     if last_start + needed < n:
-        starts.append(n - needed)  # прижимаем последнее окно к концу, не теряя хвост
+        starts.append(n - needed)  # align the last window to the end so the tail is not lost
 
     n_windows = len(starts)
     X = np.empty((n_windows, seq_len, n_feat), dtype=_SEQ_DTYPE)
-    # последняя размерность оставлена (=1), а не убрана совсем, чтобы
-    # model.compute_step_scores(targets[..., 0]) не пришлось менять
+    # the last dimension is kept (=1) rather than removed, so that
+    # model.compute_step_scores(targets[..., 0]) does not need changes
     y = np.empty((n_windows, seq_len, 1), dtype=_SEQ_DTYPE)
     for i, start in enumerate(starts):
         chunk = rows[start : start + needed]
         X[i] = chunk[:-1]
-        y[i, :, 0] = chunk[1:, 0]  # next syscall — единственная цель после удаления process-головы
+        y[i, :, 0] = chunk[1:, 0]  # next syscall is the only target after removing the process head
     return X, y
 
 
@@ -82,15 +82,15 @@ def build_normal_sequences(
             X_parts.append(X)
             y_parts.append(y)
         if (i + 1) % ram_check_every_n_recordings == 0:
-            resource_guard.check_ram(f"{service_name}/{split}: после {i + 1} записей")
+            resource_guard.check_ram(f"{service_name}/{split}: after {i + 1} recordings")
 
     if not X_parts:
         return np.empty((0, seq_len, num_features(use_arg_count_feature)), dtype=_SEQ_DTYPE), np.empty((0, seq_len, 1), dtype=_SEQ_DTYPE)
 
-    resource_guard.check_ram(f"{service_name}/{split}: перед склейкой ({len(X_parts)} записей)")
+    resource_guard.check_ram(f"{service_name}/{split}: before concatenation ({len(X_parts)} recordings)")
     X_all = np.concatenate(X_parts, axis=0)
     y_all = np.concatenate(y_parts, axis=0)
-    resource_guard.check_ram(f"{service_name}/{split}: после склейки ({len(X_all)} окон)")
+    resource_guard.check_ram(f"{service_name}/{split}: after concatenation ({len(X_all)} windows)")
     return X_all, y_all
 
 
@@ -125,7 +125,7 @@ def build_test_sequences(
             attack_parts.append(np.full(len(X), is_attack, dtype=bool))
             if (i + 1) % ram_check_every_n_recordings == 0:
                 group = "abnormal" if is_attack else "normal"
-                resource_guard.check_ram(f"{service_name}/test/{group}: после {i + 1} записей")
+                resource_guard.check_ram(f"{service_name}/test/{group}: after {i + 1} recordings")
 
     process_group(normal_files, False)
     process_group(abnormal_files, True)
@@ -137,10 +137,10 @@ def build_test_sequences(
             np.empty((0,), dtype=bool),
         )
 
-    resource_guard.check_ram(f"{service_name}/test: перед склейкой ({len(X_parts)} записей)")
+    resource_guard.check_ram(f"{service_name}/test: before concatenation ({len(X_parts)} recordings)")
     X_all = np.concatenate(X_parts, axis=0)
     y_all = np.concatenate(y_parts, axis=0)
     attack_all = np.concatenate(attack_parts, axis=0)
-    resource_guard.check_ram(f"{service_name}/test: после склейки ({len(X_all)} окон, "
-                              f"{attack_all.sum()} атакующих / {len(attack_all)} всего)")
+    resource_guard.check_ram(f"{service_name}/test: after concatenation ({len(X_all)} windows, "
+                              f"{attack_all.sum()} attack / {len(attack_all)} total)")
     return X_all, y_all, attack_all

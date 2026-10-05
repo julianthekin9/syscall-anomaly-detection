@@ -4,7 +4,7 @@ from syscall_hids.data import format as fmt
 
 @dataclass
 class ParsedLine:
-    timestamp: float  # абсолютные unix-секунды
+    timestamp: float  # absolute unix seconds
     syscall: str
     process_name: str
     direction: str
@@ -12,7 +12,7 @@ class ParsedLine:
 
 
 def parse_log_line(line: str) -> ParsedLine | None:
-    """Парсит одну строку .sc-записи. Возвращает None для "мусорных" строк."""
+    """Parses one line of a .sc recording. Returns None for "garbage" lines."""
     fields = line.strip().split(" ")
     if len(fields) < fmt.MIN_RAW_FIELDS:
         return None
@@ -41,7 +41,7 @@ def parse_log_line(line: str) -> ParsedLine | None:
 
 
 def read_recording(path: str) -> list[ParsedLine]:
-    """Читает один .sc-файл и возвращает список распарсенных строк (без 'switch')."""
+    """Reads one .sc file and returns a list of parsed lines (without 'switch')."""
     lines: list[ParsedLine] = []
     with open(path, encoding="utf-8", errors="ignore") as f:
         for raw_line in f:

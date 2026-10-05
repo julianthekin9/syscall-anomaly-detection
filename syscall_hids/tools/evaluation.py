@@ -95,7 +95,7 @@ def quick_test_evaluation(
     window_agg_quantile: float,
     plots_dir: str,
 ) -> dict | None:
-    """Діагностика на test. Повертає метрики (те саме, що в classification_report, + auc) або None."""
+    """Diagnostics on test. Returns metrics (same as in classification_report, + auc) or None."""
     model.eval()
     steps_parts: list[torch.Tensor] = []
     truth: list[bool] = []
@@ -108,7 +108,7 @@ def quick_test_evaluation(
             truth.extend(window_is_attack.tolist() if torch.is_tensor(window_is_attack) else list(window_is_attack))
 
     if not truth:
-        logging.warning("test-спліт порожній — пропускаю diagnostics-оцінку")
+        logging.warning("test split is empty, skipping diagnostics evaluation")
         return None
 
     all_steps = torch.cat(steps_parts, dim=0)
@@ -118,16 +118,16 @@ def quick_test_evaluation(
     predicted_attack = [s > threshold for s in window_scores]
 
     report_kwargs = dict(target_names=["Normal", "Attack"], digits=3, zero_division=0)
-    logging.info(f"(агрегація вікна: {window_agg}, score = NLL наступного syscall'а)")
+    logging.info(f"(window aggregation: {window_agg}, score = NLL of the next syscall)")
     logging.info("" + classification_report(truth, predicted_attack, **report_kwargs))
     report = classification_report(truth, predicted_attack, output_dict=True, **report_kwargs)
     auc: float | None = None
     if len(set(truth)) == 2:
         auc = roc_auc_score(truth, window_scores)
-        logging.info(f"Площа під ROC-кривою (ROC-AUC): {auc:.4f}")
+        logging.info(f"Area under the ROC curve (ROC-AUC): {auc:.4f}")
         plot_roc_curve(truth, window_scores, service_name, auc, roc_tags, plots_dir)
     else:
-        logging.warning("У test-спліті присутній тільки один клас вікон — ROC-AUC не рахується")
+        logging.warning("Only one window class is present in the test split, ROC-AUC is not computed")
 
     def _class_metrics(name: str) -> dict:
         r = report[name]
@@ -152,14 +152,14 @@ def calibrate_and_evaluate(
     args,
     epoch_label: str | None = None,
 ) -> tuple[float, dict | None]:
-    """Калібрує поріг на val і, якщо є test, рахує діагностику. Повертає (поріг, метрики test або None)."""
+    """Calibrates the threshold on val and, if test exists, computes diagnostics. Returns (threshold, test metrics or None)."""
     threshold = calibrate_threshold(
         model, val_loader, device, args.window_agg, args.window_agg_quantile, args.threshold_percentile
     )
     prefix = f"[{service_name}]" + (f" ({epoch_label})" if epoch_label else "")
-    logging.info(f"{prefix} поріг тривоги (nll, {args.threshold_percentile}-й перцентиль val): {threshold:.4f}")
+    logging.info(f"{prefix} alert threshold (nll, {args.threshold_percentile}th percentile of val): {threshold:.4f}")
     if test_loader is not None:
-        logging.info(f"{prefix} diagnostics-оцінка на test-спліті:")
+        logging.info(f"{prefix} diagnostics evaluation on the test split:")
         test_metrics = quick_test_evaluation(
             model, test_loader, threshold, device, service_name, roc_tags,
             args.window_agg, args.window_agg_quantile, args.plots_dir,
