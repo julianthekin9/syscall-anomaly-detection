@@ -30,7 +30,7 @@ seq_step: 32  # window step for training/calibration (< seq_len => overlap)
 # --- Training ---
 batch_size: 32
 lr: 1.0e-4
-max_num_epochs: 100
+max_num_epochs: 15
 restart_latest: false  # resume training from {model_dir}/<service>.pt
 
 # --- Scoring and threshold ---
