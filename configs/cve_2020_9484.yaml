@@ -1,0 +1,51 @@
+# Experiment: LID-DS 2021, scenario CVE-2020-9484 (converted with experiments/lid_ds/convert.py).
+#   hids-train --config configs/cve_2020_9484.yaml
+#   hids-train --config configs/cve_2020_9484.yaml --lr 5e-4 --max_num_epochs 20   # CLI overrides YAML
+# Keys = hids-train argument names (hids-train --help); an unknown key is an error.
+# Model, vocab and plot paths are not set: they are derived from --work_dir (default ".").
+# The same file works for hids-eval / hids-detect: keys they do not use are ignored.
+
+# --- Data ---
+dataset_root: ./DATASET_LIDDS
+services: [CVE-2020-9484]
+
+# --- Features ---
+use_arg_count_feature: true
+arg_count_buckets: 8  # 0,1,2,...,6, "7+" — clip(arg_count, 0, arg_count_buckets-1)
+force_rebuild_vocab: false
+
+# --- Model ---
+embed_dim_syscall: 16
+embed_dim_process: 8
+embed_dim_direction: 2
+embed_dim_arg_count: 4  # used only if use_arg_count_feature=true
+hidden_dim: 200
+num_layers: 2
+dropout: 0.2  # between LSTM layers when num_layers > 1
+
+# --- Windows ---
+seq_len: 64   # sequence length (syscall steps) per train sample
+seq_step: 32  # window step for training/calibration (< seq_len => overlap)
+
+# --- Training ---
+batch_size: 32
+lr: 1.0e-4
+max_num_epochs: 15
+restart_latest: false  # resume training from {model_dir}/<service>.pt
+
+# --- Scoring and threshold ---
+window_agg: quantile         # quantile | max | mean
+window_agg_quantile: 0.90    # used only if window_agg=quantile
+threshold_percentile: 99.0
+
+# --- Evaluation ---
+eval_test_every_epoch: false
+metrics_eval_every_n_epochs: 1
+train_metrics_max_batches: null  # null: train metrics over all batches
+
+# --- RAM ---
+ram_guard_enabled: true
+ram_soft_limit_percent: 80.0  # above -> gc.collect() + pause + warning, work continues
+ram_hard_limit_percent: 92.0  # above -> controlled stop (RamLimitExceeded) instead of SIGKILL
+ram_throttle_sleep_sec: 2.0   # pause after a soft-limit hit
+ram_check_every_n_recordings: 20  # how often to check RAM while reading train/val/test recordings
