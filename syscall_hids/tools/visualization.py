@@ -9,6 +9,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+TRAIN_COLOR = "#16a34a"  # зелений: навчальна вибірка
+VAL_COLOR = "#7c3aed"  # фіолетовий: валідаційна вибірка
+
 
 def plot_training_curves(service_name: str, history: dict[str, list[float]], plots_dir: str) -> str | None:
     if not history.get("epoch", []):
@@ -49,19 +52,19 @@ def _draw_training_curves(history: dict[str, list[float]], out_path: str) -> Non
     fig, axes = plt.subplots(2, 1, figsize=(6, 8), squeeze=False)
 
     def _plot(ax, train_key: str, val_key: str, title: str, ylim01: bool = False) -> None:
-        ax.plot(epochs, history[train_key], marker="o", label="Train")
-        ax.plot(epochs, history[val_key], marker="o", label="Validation")
+        ax.plot(epochs, history[train_key], marker="o", color=TRAIN_COLOR, label="Навчальна вибірка")
+        ax.plot(epochs, history[val_key], marker="o", color=VAL_COLOR, label="Валідаційна вибірка")
         ax.set_title(title)
-        ax.set_xlabel("epoch")
+        ax.set_xlabel("Епоха")
         if ylim01:
             ax.set_ylim(0, 1.02)
         ax.grid(alpha=0.3)
         ax.legend()
 
-    _plot(axes[0][0], "train_loss_syscall", "val_loss_syscall", "Loss")
-    _plot(axes[1][0], "train_precision_syscall", "val_precision_syscall", "Precision", ylim01=True)
+    _plot(axes[0][0], "train_loss_syscall", "val_loss_syscall", "Функція втрат")
+    _plot(axes[1][0], "train_precision_syscall", "val_precision_syscall", "Точність (precision)", ylim01=True)
 
-    fig.suptitle("Metrics per epoch")
+    fig.suptitle("Метрики за епохами")
     fig.tight_layout()
     fig.savefig(out_path, dpi=120)
     plt.close(fig)
@@ -117,10 +120,10 @@ def plot_roc_curve(
 
     plt.figure(figsize=(7, 6))
     plt.plot(fpr, tpr, label=f"ROC-AUC = {auc:.4f}")
-    plt.plot([0, 1], [0, 1], linestyle="--", label="Random classifier")
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title(f"ROC curve: {service_name}")
+    plt.plot([0, 1], [0, 1], linestyle="--", label="Випадковий класифікатор")
+    plt.xlabel("Частка хибнопозитивних спрацювань (FPR)")
+    plt.ylabel("Частка істиннопозитивних спрацювань (TPR)")
+    plt.title(f"ROC-крива: {service_name}")
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
