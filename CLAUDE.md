@@ -58,7 +58,7 @@
 - Все параметры и умолчания: `hids-train --help`
 - Повтор запуска: `hids-train --config {model_dir}/<сценарий>_config.yaml` (итоговая конфигурация пишется рядом с моделью и в чекпоинт, ключ `train_args`)
 - Оффлайн-оценка: `hids-eval --config configs/php_cwe_434.yaml --service <сценарий> --log <файл.sc>` или `--eval-test-split`
-- Калибровка q и p под F2 (calib/holdout по записям, кеш NLL по шагам): `hids-calibrate --config configs/php_cwe_434.yaml --service <сценарий> [--write_checkpoint]` → `{work_dir}/calibration/<сценарий>/` (`calibration.json`, `grid.csv`, `f2_heatmap.png`, `pr_curve_holdout.png`); копия модели `{model_dir}/<сценарий>_f2.pt`, оценка копии: `hids-eval --service <сценарий> --checkpoint {model_dir}/<сценарий>_f2.pt --eval-test-split`
+- Калибровка и сравнение методов под F2 (calib/holdout по записям, общий бутстреп, кеш NLL и рангов по шагам): `hids-calibrate --config configs/php_cwe_434.yaml --service <сценарий> [--methods nll topk run_nll run_rank] [--write_checkpoint]` → `{work_dir}/calibration/<сценарий>/`: `<метод>/` (`calibration.json`, `grid.csv`, `f2_heatmap.png`, `pr_curve_holdout.png`) и `comparison/` (`comparison.json`, `comparison.csv`, `f2_comparison.png`, `pr_comparison.png`, `roc_comparison.png`, ΔF2 к `nll` с 95% ДИ). `--write_checkpoint` пишет только `nll`: копия модели `{model_dir}/<сценарий>_f2.pt`, оценка копии: `hids-eval --service <сценарий> --checkpoint {model_dir}/<сценарий>_f2.pt --eval-test-split`
 - Кривые обучения из файла метрик: `hids-plot-train --results results/hids_<сценарий>_run-123_train.txt [--out curves.png]`
 - Realtime (root): `sudo hids-detect --service <сценарий> --container <контейнер>`
 - Тесты: `pytest tests/`

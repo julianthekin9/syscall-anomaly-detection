@@ -1,0 +1,150 @@
+{
+  "selected": {
+    "window_agg": "quantile",
+    "q": 1.0,
+    "p": 90.0,
+    "threshold": 4.171541690826416,
+    "f2_smoothed": 0.3704906204906205,
+    "f2": 0.2857142857142857
+  },
+  "raw_max": {
+    "window_agg": "quantile",
+    "q": 0.99,
+    "p": 90.7,
+    "threshold": 4.1572651243209835,
+    "f2": 0.49668874172185434
+  },
+  "baseline": {
+    "window_agg": "quantile",
+    "q": 0.9,
+    "p": 99.0,
+    "p_source": "--baseline_p",
+    "threshold": 4.132045254707337,
+    "checkpoint_window_agg": "quantile"
+  },
+  "metrics": {
+    "calib": {
+      "selected": {
+        "tp": 8,
+        "fp": 4,
+        "fn": 24,
+        "tn": 28,
+        "precision": 0.6666666666666666,
+        "recall": 0.25,
+        "fpr": 0.125,
+        "f1": 0.36363636363636365,
+        "f2": 0.2857142857142857
+      },
+      "baseline": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 30,
+        "tn": 32,
+        "precision": 1.0,
+        "recall": 0.0625,
+        "fpr": 0.0,
+        "f1": 0.11764705882352941,
+        "f2": 0.07692307692307693
+      }
+    },
+    "holdout": {
+      "selected": {
+        "tp": 3,
+        "fp": 4,
+        "fn": 13,
+        "tn": 12,
+        "precision": 0.42857142857142855,
+        "recall": 0.1875,
+        "fpr": 0.25,
+        "f1": 0.26086956521739124,
+        "f2": 0.21126760563380284,
+        "roc_auc": 0.41796875,
+        "ci95": {
+          "f2": [
+            0.21126760563380284,
+            0.21126760563380284
+          ],
+          "recall": [
+            0.1875,
+            0.1875
+          ],
+          "fpr": [
+            0.25,
+            0.25
+          ]
+        }
+      },
+      "baseline": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 16,
+        "tn": 16,
+        "precision": 0.0,
+        "recall": 0.0,
+        "fpr": 0.0,
+        "f1": 0.0,
+        "f2": 0.0,
+        "roc_auc": 0.48046875,
+        "ci95": {
+          "f2": [
+            0.0,
+            0.0
+          ],
+          "recall": [
+            0.0,
+            0.0
+          ],
+          "fpr": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  },
+  "sanity": {
+    "threshold_checkpoint": 4.132045254707337,
+    "threshold_recomputed": 4.132045269012451,
+    "p": 99.0,
+    "rel_diff": 3.4619936483156252e-09,
+    "threshold_match": true
+  },
+  "attack_fraction_holdout": 0.5,
+  "prevalence_rescaled": {
+    "prevalence": 0.01,
+    "selected": {
+      "precision": 0.0075187969924812035,
+      "recall": 0.1875,
+      "f2": 0.032397408207343416
+    },
+    "baseline": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f2": 0.0
+    }
+  },
+  "split": {
+    "calib": {
+      "normal": [
+        "FIXT/test/normal/fresh_antonelli_2697.sc",
+        "FIXT/test/normal/gigantic_lamport_5297.sc"
+      ],
+      "abnormal": [
+        "FIXT/test/abnormal/agreeable_bhaskara_7268.sc",
+        "FIXT/test/abnormal/ancient_keller_8759.sc"
+      ],
+      "n_windows": 64,
+      "n_attack_windows": 32
+    },
+    "holdout": {
+      "normal": [
+        "FIXT/test/normal/gigantic_elgamal_8309.sc"
+      ],
+      "abnormal": [
+        "FIXT/test/abnormal/aggressive_snyder_1122.sc"
+      ],
+      "n_windows": 32,
+      "n_attack_windows": 16
+    }
+  }
+}
