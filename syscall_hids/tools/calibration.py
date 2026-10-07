@@ -10,11 +10,13 @@
 - run_nll / run_rank: найдовша серія аномальних кроків у вікні, R >= m (див. run_grid_search).
 """
 
+import warnings
 from dataclasses import dataclass
 from typing import Any, Callable, Literal
 
 import numpy as np
 import torch
+from sklearn.metrics import roc_auc_score
 
 Agg = float | Literal["mean"]
 StepKey = Literal["nll", "rank"]
@@ -90,8 +92,14 @@ def metrics_from_confusion(tp, fp, fn, tn, beta: float) -> dict[str, np.ndarray]
         "recall": recall,
         "fpr": fpr,
         "f1": fbeta(precision, recall, 1.0),
-        f"f{beta:g}": fbeta(precision, recall, beta),
+        "fbeta": fbeta(precision, recall, beta),
     }
+
+
+def trivial_fbeta(pi: float, beta: float) -> float:
+    """F-beta детектора «тривога на кожне вікно» при частці атак pi: recall = 1, precision = pi."""
+    b2 = beta * beta
+    return float((1 + b2) * pi / (b2 * pi + 1)) if pi > 0 else 0.0
 
 
 def grid_search(
@@ -105,14 +113,14 @@ def grid_search(
     """Сітка (рядок агрегації, p): поріг = percentile(val-оцінок, p), метрики на test-вікнах.
 
     Повертає масиви форми [len(rows), len(p_grid)]: threshold, tp, fp, fn, tn, precision,
-    recall, fpr, f1, f{beta} (ключ "fbeta" дублює останній).
+    recall, fpr, f1, fbeta.
     """
     out: dict[str, list[np.ndarray]] = {}
     for q in rows:
         thresholds = np.percentile(aggregate(val_nll, q), p_grid)
         conf = confusion_at_threshold(aggregate(test_nll, q), test_is_attack, thresholds)
         metrics = metrics_from_confusion(conf["tp"], conf["fp"], conf["fn"], conf["tn"], beta)
-        for key, value in {"threshold": thresholds, **conf, **metrics, "fbeta": metrics[f"f{beta:g}"]}.items():
+        for key, value in {"threshold": thresholds, **conf, **metrics}.items():
             out.setdefault(key, []).append(np.asarray(value))
     return {key: np.stack(values) for key, values in out.items()}
 
@@ -169,7 +177,7 @@ def run_grid_search(
     Для рангів τ ціле, тож сусідні p часто дають той самий τ (сходинки на тепловій карті).
 
     Повертає масиви [len(rows), len(p_grid)]: threshold (= τ у кожному стовпці), tp, fp, fn, tn,
-    precision, recall, fpr, f1, f{beta}, fbeta.
+    precision, recall, fpr, f1, fbeta.
     """
     length = test_steps.shape[1]
     m_idx = np.asarray(rows, dtype=np.int64)
@@ -184,7 +192,7 @@ def run_grid_search(
     fn, tn = n_attack - tp, n_normal - fp
     metrics = metrics_from_confusion(tp, fp, fn, tn, beta)
     threshold = np.broadcast_to(taus, tp.shape).astype(np.float64)
-    return {"threshold": threshold, "tp": tp, "fp": fp, "fn": fn, "tn": tn, **metrics, "fbeta": metrics[f"f{beta:g}"]}
+    return {"threshold": threshold, "tp": tp, "fp": fp, "fn": fn, "tn": tn, **metrics}
 
 
 def run_operating_point(val_steps: np.ndarray, test_steps: np.ndarray, m: int, p: float) -> tuple[np.ndarray, float]:
@@ -193,11 +201,13 @@ def run_operating_point(val_steps: np.ndarray, test_steps: np.ndarray, m: int, p
     return max_run_length(test_steps > tau).astype(np.float64), m - 0.5
 
 
-def _box_mean(values: np.ndarray, size_rows: int, size_cols: int) -> np.ndarray:
-    """Середнє по околу size_rows×size_cols; на краях — лише по наявних сусідах."""
+def _box_mean(values: np.ndarray, size_rows: int, size_cols: int, mask: np.ndarray | None = None) -> np.ndarray:
+    """Середнє по околу size_rows×size_cols лише по наявних і допустимих (mask) сусідах; без сусідів — nan."""
+    if mask is None:
+        mask = np.ones_like(values)
     pr, pc = size_rows // 2, size_cols // 2
-    padded = np.pad(values, ((pr, pr), (pc, pc)))
-    counts = np.pad(np.ones_like(values), ((pr, pr), (pc, pc)))
+    padded = np.pad(np.where(mask > 0, values, 0.0), ((pr, pr), (pc, pc)))
+    counts = np.pad(mask.astype(values.dtype), ((pr, pr), (pc, pc)))
     total = np.zeros_like(values)
     n = np.zeros_like(values)
     rows, cols = values.shape
@@ -205,27 +215,135 @@ def _box_mean(values: np.ndarray, size_rows: int, size_cols: int) -> np.ndarray:
         for dc in range(size_cols):
             total += padded[dr : dr + rows, dc : dc + cols]
             n += counts[dr : dr + rows, dc : dc + cols]
-    return total / n
+    return np.divide(total, n, out=np.full_like(values, np.nan), where=n > 0)
+
+
+def _argmax_with_tiebreak(values: np.ndarray, allowed: np.ndarray, tiebreak: np.ndarray | None) -> tuple[int, int]:
+    """argmax серед allowed; за рівного значення — мінімальний tiebreak (без tiebreak — перший, як np.argmax)."""
+    masked = np.where(allowed, values, -np.inf)
+    if tiebreak is None:
+        idx = np.unravel_index(int(np.argmax(masked)), values.shape)
+    else:
+        best = masked.max()
+        candidates = np.where(masked >= best - 1e-12, np.asarray(tiebreak, dtype=np.float64), np.inf)
+        idx = np.unravel_index(int(np.argmin(candidates)), values.shape)
+    return int(idx[0]), int(idx[1])
 
 
 def smooth_select(
-    score: np.ndarray, mean_row: int | None = None
-) -> tuple[tuple[int, int], tuple[int, int], np.ndarray]:
+    score: np.ndarray,
+    mean_row: int | None = None,
+    feasible: np.ndarray | None = None,
+    tiebreak: np.ndarray | None = None,
+) -> tuple[tuple[int, int], tuple[int, int], np.ndarray] | None:
     """Стійкий вибір точки сітки: argmax середнього по околу 3×3.
 
     Рядок "mean" (mean_row) не є сусідом квантильних рядків, тому згладжується лише вздовж осі p.
-    Повертає (обрана точка, сирий максимум, згладжена сітка).
+    feasible — маска допустимих точок (напр. FPR(calib) <= max_fpr): згладжування лише по допустимих
+    сусідах, вибір і сирий максимум — лише серед допустимих. tiebreak — за рівного значення обирається
+    точка з меншим tiebreak (напр. FPR). Сусідство береться в індексах сітки (сітка p нерівномірна).
+    Повертає (обрана точка, сирий максимум, згладжена сітка) або None, якщо допустимих точок немає.
     """
     score = np.asarray(score, dtype=np.float64)
+    allowed = np.ones(score.shape, dtype=bool) if feasible is None else np.asarray(feasible, dtype=bool)
+    if not allowed.any():
+        return None
+    mask = None if feasible is None else allowed.astype(np.float64)
     smoothed = np.empty_like(score)
     q_rows = [i for i in range(score.shape[0]) if i != mean_row]
     if q_rows:
-        smoothed[q_rows] = _box_mean(score[q_rows], 3, 3)
+        smoothed[q_rows] = _box_mean(score[q_rows], 3, 3, None if mask is None else mask[q_rows])
     if mean_row is not None:
-        smoothed[[mean_row]] = _box_mean(score[[mean_row]], 1, 3)
-    selected = np.unravel_index(int(np.argmax(smoothed)), score.shape)
-    raw = np.unravel_index(int(np.argmax(score)), score.shape)
-    return (int(selected[0]), int(selected[1])), (int(raw[0]), int(raw[1])), smoothed
+        smoothed[[mean_row]] = _box_mean(score[[mean_row]], 1, 3, None if mask is None else mask[[mean_row]])
+    selected = _argmax_with_tiebreak(smoothed, allowed, tiebreak)
+    raw = _argmax_with_tiebreak(score, allowed, tiebreak)
+    return selected, raw, smoothed
+
+
+@dataclass(frozen=True)
+class Objective:
+    """Критерій вибору робочої точки на calib.
+
+    fbeta — максимум F-beta; fbeta_prevalence — максимум F-beta, перерахованого на --prevalence;
+    recall_at_fpr — максимум recall (за рівного recall — менший FPR). max_fpr — обмеження FPR(calib) <= max_fpr
+    (для recall_at_fpr обов'язкове).
+    """
+
+    kind: Literal["fbeta", "fbeta_prevalence", "recall_at_fpr"]
+    max_fpr: float | None = None
+
+    @property
+    def tag(self) -> str:
+        if self.kind == "recall_at_fpr":
+            return f"recall_at_fpr{self.max_fpr:g}"
+        return self.kind + ("" if self.max_fpr is None else f"_fpr{self.max_fpr:g}")
+
+
+OBJECTIVE_KINDS = ("fbeta", "fbeta_prevalence", "recall_at_fpr")
+
+
+RECALL_AT_FPR_DEFAULT = (0.01, 0.05)
+
+
+def build_objectives(kinds: list[str], max_fprs: list[float] | None) -> list[Objective]:
+    """fbeta / fbeta_prevalence: блок без обмеження + блок на кожне max_fpr; recall_at_fpr: блок на кожне max_fpr.
+
+    max_fprs = None (не задано): fbeta-критерії без обмеження, recall_at_fpr — RECALL_AT_FPR_DEFAULT.
+    """
+    out: list[Objective] = []
+    for kind in dict.fromkeys(kinds):
+        limits = list(max_fprs) if max_fprs is not None else (list(RECALL_AT_FPR_DEFAULT) if kind == "recall_at_fpr" else [])
+        if kind != "recall_at_fpr":
+            out.append(Objective(kind))
+        out += [Objective(kind, float(f)) for f in limits]
+    return out
+
+
+def objective_grid(
+    grid: dict[str, np.ndarray], objective: Objective, beta: float, prevalence: float
+) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None]:
+    """(значення критерію, маска допустимості або None, tiebreak або None) для сітки метрик calib."""
+    if objective.kind == "fbeta":
+        score, tiebreak = grid["fbeta"], None
+    elif objective.kind == "fbeta_prevalence":
+        score = fbeta(precision_at_prevalence(grid["recall"], grid["fpr"], prevalence), grid["recall"], beta)
+        tiebreak = None
+    else:
+        score, tiebreak = grid["recall"], grid["fpr"]
+    feasible = None if objective.max_fpr is None else grid["fpr"] <= objective.max_fpr
+    return np.asarray(score, dtype=np.float64), feasible, tiebreak
+
+
+def is_degenerate(fpr: float, value: float, trivial: float, margin: float = 0.01) -> bool:
+    """Точка не краща за «тривогу на кожне вікно»: FPR > 0.5 або F-beta не вище тривіального більш ніж на margin."""
+    return bool(fpr > 0.5 or value <= trivial + margin)
+
+
+def default_p_grid() -> np.ndarray:
+    """90–99 крок 0.5, 99.1–99.9 крок 0.1, далі 99.9–99.999 логарифмічно за часткою 100 − p (без повтору 99.9).
+
+    Для обмеження FPR <= 1% потрібні пороги вище 99.9: у серійних методів при m = 1 частка тривог
+    на нормальному вікні ≈ 1 − (p/100)^L.
+    """
+    coarse = np.arange(90.0, 99.0 + 0.25, 0.5)
+    fine = np.arange(99.1, 99.9 + 0.05, 0.1)
+    tail = 100.0 - np.logspace(np.log10(0.1), np.log10(0.001), 10)[1:]
+    return np.round(np.concatenate([coarse, fine, tail]), 6)
+
+
+def window_starts(n: int, seq_len: int, step: int) -> np.ndarray:
+    """Індекси першої строки кожного вікна — та сама формула, що в data.sequences.make_sequences.
+
+    Вікно зі стартом s займає строки s..s+seq_len (входи s..s+seq_len−1, цілі s+1..s+seq_len);
+    останнє вікно притиснуте до кінця. Тест звіряє з вмістом вікон make_sequences.
+    """
+    needed = seq_len + 1
+    if n < needed:
+        return np.empty(0, dtype=np.int64)
+    starts = list(range(0, n - needed + 1, step))
+    if starts[-1] + needed < n:
+        starts.append(n - needed)
+    return np.asarray(starts, dtype=np.int64)
 
 
 def edge_flags(selected: tuple[int, int], shape: tuple[int, int], mean_row: int | None = None) -> dict[str, bool]:
@@ -292,15 +410,96 @@ def ci95(values: np.ndarray) -> list[float]:
     return [float(lo), float(hi)]
 
 
-def ci95_summary(boot: dict[str, np.ndarray], beta: float) -> dict[str, list[float]]:
+def ci95_summary(boot: dict[str, np.ndarray]) -> dict[str, list[float]]:
     """95% бутстреп-інтервали F-beta, recall і FPR."""
-    return {key: ci95(boot[key]) for key in (f"f{beta:g}", "recall", "fpr")}
+    return {key: ci95(boot[key]) for key in ("fbeta", "recall", "fpr")}
 
 
 def paired_delta_ci(boot_a: np.ndarray, boot_b: np.ndarray) -> dict:
     """95% інтервал парної різниці a − b на тих самих ресемплах; значуща, якщо інтервал не містить 0."""
     lo, hi = ci95(np.asarray(boot_a, dtype=np.float64) - np.asarray(boot_b, dtype=np.float64))
     return {"ci95": [lo, hi], "significant": not lo <= 0.0 <= hi}
+
+
+PAUC_MAX_FPR = 0.05
+
+
+def pauc(is_attack: np.ndarray, scores: np.ndarray, sample_weight: np.ndarray | None = None,
+         max_fpr: float = PAUC_MAX_FPR) -> float:
+    """Часткова ROC-AUC при FPR <= max_fpr зі стандартизацією McClish (sklearn roc_auc_score(max_fpr=...))."""
+    return float(roc_auc_score(is_attack, scores, sample_weight=sample_weight, max_fpr=max_fpr))
+
+
+def _local_index(rec_idx: np.ndarray, recs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """(маска вікон, що належать recs; локальний індекс записи в порядку recs для цих вікон)."""
+    pos = np.full(int(max(rec_idx.max(), recs.max())) + 1, -1, dtype=np.int64)
+    pos[recs] = np.arange(len(recs))
+    in_part = pos[rec_idx] >= 0
+    return in_part, pos[rec_idx[in_part]]
+
+
+def bootstrap_auc(
+    scores: np.ndarray, is_attack: np.ndarray, rec_idx: np.ndarray, recs: np.ndarray, sample: np.ndarray,
+    max_fpr: float | None = PAUC_MAX_FPR,
+) -> np.ndarray:
+    """(p)AUC на кожному ресемплі [n_boot]: вага вікна = кратність його записи в ресемплі."""
+    in_part, local = _local_index(rec_idx, recs)
+    sc, att = scores[in_part], is_attack[in_part]
+    out = np.empty(len(sample))
+    for b, picks in enumerate(sample):
+        w = np.bincount(picks, minlength=len(recs))[local].astype(np.float64)
+        keep = w > 0
+        out[b] = roc_auc_score(att[keep], sc[keep], sample_weight=w[keep], max_fpr=max_fpr)
+    return out
+
+
+def record_flags(
+    alarm: np.ndarray, is_attack: np.ndarray, rec_idx: np.ndarray, t_end: np.ndarray, recs: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Для кожної записи recs: (є хоч одна тривога, запис атакувальний, затримка першої тривоги в с або nan).
+
+    Затримка — t_end першого тривожного вікна від початку файлу; атакувальний файл починається з експлойту
+    (так ріже конвертер), тож це затримка від початку атаки.
+    """
+    in_part, local = _local_index(rec_idx, recs)
+    n = len(recs)
+    alarmed = np.bincount(local, weights=alarm[in_part], minlength=n) > 0
+    attack = np.bincount(local, weights=is_attack[in_part], minlength=n) > 0
+    delay = np.full(n, np.inf)
+    a_local, a_t = local[alarm[in_part]], t_end[in_part][alarm[in_part]]
+    np.minimum.at(delay, a_local, a_t.astype(np.float64))
+    delay[~np.isfinite(delay)] = np.nan
+    return alarmed, attack, delay
+
+
+def record_metrics(alarmed: np.ndarray, attack: np.ndarray, delay: np.ndarray) -> dict:
+    """Частка атакувальних записів з тривогою, частка нормальних записів з тривогою, медіана затримки."""
+    detected = alarmed & attack
+    return {
+        "attack_detected": float(alarmed[attack].mean()) if attack.any() else 0.0,
+        "normal_alarmed": float(alarmed[~attack].mean()) if (~attack).any() else 0.0,
+        "median_delay_sec": float(np.median(delay[detected])) if detected.any() else None,
+        "n_attack_records": int(attack.sum()),
+        "n_detected": int(detected.sum()),
+        "n_normal_records": int((~attack).sum()),
+    }
+
+
+def bootstrap_record_metrics(alarmed: np.ndarray, attack: np.ndarray, delay: np.ndarray, sample: np.ndarray) -> dict:
+    """95% ДІ метрик записів на спільних ресемплах (sample — локальні індекси тих самих recs)."""
+    a, d = alarmed[sample], attack[sample]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        det = (a & d).sum(1) / d.sum(1)
+        norm = (a & ~d).sum(1) / (~d).sum(1)
+    delays = np.where(a & d, delay[sample], np.nan)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # ресемпл без виявлених атак -> nan
+        med = np.nanmedian(delays, axis=1)
+    out = {}
+    for key, values in (("attack_detected", det), ("normal_alarmed", norm), ("median_delay_sec", med)):
+        values = values[np.isfinite(values)]
+        out[key] = ci95(values) if len(values) else None
+    return out
 
 
 @dataclass(frozen=True)
@@ -358,3 +557,30 @@ def build_methods(names: list[str]) -> list[Method]:
             operating_point=quantile_operating_point if quantile else run_operating_point,
         ))
     return methods
+
+
+def curve_scores(method: Method, val_steps: np.ndarray, test_steps: np.ndarray, param) -> np.ndarray:
+    """Оцінки вікон для ROC без вибору порогу: квантильні методи — aggregate(test, q);
+    серійні — R при кроковому порозі τ = percentile(кроків val, p)."""
+    if method.family == "quantile":
+        return aggregate(test_steps, param)
+    tau = float(np.percentile(val_steps.ravel(), param))
+    return max_run_length(test_steps > tau).astype(np.float64)
+
+
+def select_curve_param(
+    method: Method, val_steps: np.ndarray, test_steps: np.ndarray, is_attack: np.ndarray, rows: list, p_grid: np.ndarray,
+    max_fpr: float = PAUC_MAX_FPR,
+) -> tuple[Any, float]:
+    """Параметр кривої з максимумом pAUC на calib: q (квантильні) або кроковий p (серійні). -> (параметр, pAUC calib)."""
+    if method.family == "quantile":
+        candidates = [(q, aggregate(test_steps, q)) for q in rows]
+    else:
+        taus = np.percentile(val_steps.ravel(), p_grid)
+        candidates = [(float(p), max_run_length(test_steps > tau).astype(np.float64)) for p, tau in zip(p_grid, taus)]
+    best_param, best = None, -np.inf
+    for param, scores in candidates:
+        value = pauc(is_attack, scores, max_fpr=max_fpr)
+        if value > best:
+            best_param, best = param, value
+    return best_param, float(best)

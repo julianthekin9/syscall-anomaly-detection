@@ -1,5 +1,6 @@
 """hids-calibrate: чисті функції tools/calibration.py та end-to-end на фікстурах tests/golden."""
 
+import csv
 import json
 import shutil
 import sys
@@ -8,32 +9,44 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
-from sklearn.metrics import fbeta_score
+from sklearn.metrics import fbeta_score, roc_auc_score
 
 from syscall_hids.cli import calibrate, eval_recordings
 from syscall_hids.tools import evaluation
+from syscall_hids.data.sequences import make_sequences
 from syscall_hids.tools.calibration import (
     METHOD_NAMES,
+    Objective,
     aggregate,
+    bootstrap_auc,
     bootstrap_metrics,
     bootstrap_samples,
+    build_objectives,
     confusion_at_threshold,
+    default_p_grid,
     edge_flags,
     fbeta,
     grid_search,
+    is_degenerate,
     max_run_length,
     metrics_from_confusion,
+    objective_grid,
     paired_delta_ci,
+    pauc,
+    record_flags,
+    record_metrics,
     run_counts_all_m,
     run_grid_search,
     run_operating_point,
     smooth_select,
     split_recordings,
     step_ranks,
+    trivial_fbeta,
+    window_starts,
 )
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
-NLL_REFERENCE = GOLDEN_DIR / "calibrate_nll_reference.json"
+REFERENCE = GOLDEN_DIR / "calibrate_reference.json"
 
 
 @pytest.mark.parametrize("beta", [0.5, 1.0, 2.0])
@@ -46,7 +59,7 @@ def test_fbeta_matches_sklearn(beta: float) -> None:
         fp = int((~y_true & y_pred).sum())
         fn = int((y_true & ~y_pred).sum())
         tn = int((~y_true & ~y_pred).sum())
-        ours = metrics_from_confusion(tp, fp, fn, tn, beta)[f"f{beta:g}"]
+        ours = metrics_from_confusion(tp, fp, fn, tn, beta)["fbeta"]
         assert float(ours) == pytest.approx(fbeta_score(y_true, y_pred, beta=beta, zero_division=0), abs=1e-12)
     assert float(fbeta(0.0, 0.0, 2.0)) == 0.0
 
@@ -88,7 +101,7 @@ def test_grid_search_beats_bad_threshold() -> None:
     best = grid["fbeta"].max()
     # заздалегідь поганий поріг: вище за всі оцінки, жодної тривоги
     bad = confusion_at_threshold(aggregate(test_nll, 0.5), is_attack, [np.inf])
-    bad_f2 = metrics_from_confusion(bad["tp"], bad["fp"], bad["fn"], bad["tn"], 2.0)["f2"][0]
+    bad_f2 = metrics_from_confusion(bad["tp"], bad["fp"], bad["fn"], bad["tn"], 2.0)["fbeta"][0]
     assert best > bad_f2 + 0.5
 
 
@@ -171,7 +184,7 @@ def test_paired_bootstrap_self_difference_is_zero() -> None:
     assert sample.shape == (300, 10)
     assert (sample[:, :5] < 5).all() and (sample[:, 5:] >= 5).all()  # normal і abnormal ресемплуються окремо
     boot = bootstrap_metrics(scores, is_attack, rec_idx, recs, 0.6, sample, 2.0)
-    delta = paired_delta_ci(boot["f2"], boot["f2"])
+    delta = paired_delta_ci(boot["fbeta"], boot["fbeta"])
     assert delta == {"ci95": [0.0, 0.0], "significant": False}
     # той самий seed — ті самі ресемпли
     np.testing.assert_array_equal(bootstrap_samples(5, 5, 300, seed=0), sample)
@@ -210,69 +223,89 @@ def _assert_close(expected, actual, path: str = "") -> None:
         assert actual == expected, path
 
 
+OBJECTIVE_TAGS = ("fbeta", "fbeta_fpr0.01", "fbeta_fpr0.05", "recall_at_fpr0.01", "recall_at_fpr0.05")
+
+
+def _rename_f2(x):
+    """Ключі версії до критеріїв: f2 -> fbeta, f2_smoothed -> score_smoothed (критерій fbeta)."""
+    names = {"f2": "fbeta", "f2_smoothed": "score_smoothed"}
+    if isinstance(x, dict):
+        return {names.get(k, k): _rename_f2(v) for k, v in x.items()}
+    return x
+
+
+def test_calibrate_regression_beta2(tmp_path: Path, monkeypatch) -> None:
+    """--beta 2 --objective fbeta з попередньою сіткою p відтворює calibration.json усіх методів версії 3f0eace."""
+    old_p_grid = [f"{p:g}" for p in np.round(np.arange(90.0, 99.9 + 0.05, 0.1), 6)]
+    out_dir = _run_calibrate(monkeypatch, tmp_path, ["--beta", "2", "--objective", "fbeta", "--p_grid", *old_p_grid])
+    reference = json.loads(REFERENCE.read_text(encoding="utf-8"))
+    for method in METHOD_NAMES:
+        result = json.loads((out_dir / "fbeta" / method / "calibration.json").read_text(encoding="utf-8"))
+        _assert_close(_rename_f2(reference[method]), result, method)
+        assert result["beta"] == 2.0 and result["objective"]["tag"] == "fbeta"
+
+
 def test_calibrate_end_to_end(tmp_path: Path, monkeypatch) -> None:
-    out_dir = _run_calibrate(monkeypatch, tmp_path, ["--methods", *METHOD_NAMES, "--write_checkpoint"])
+    out_dir = _run_calibrate(monkeypatch, tmp_path, [
+        "--objective", "fbeta", "--objective", "recall_at_fpr", "--max_fpr", "0.01", "0.05", "--write_checkpoint",
+    ])
     model_dir = tmp_path / "models"
 
     assert (out_dir / "cache_FIXT.npz").exists()
-    for method in METHOD_NAMES:
-        for name in ("calibration.json", "grid.csv", "f2_heatmap.png", "pr_curve_holdout.png"):
-            assert (out_dir / method / name).exists(), f"{method}/{name}"
-    for name in ("comparison.json", "comparison.csv", "f2_comparison.png", "pr_comparison.png", "roc_comparison.png"):
-        assert (out_dir / "comparison" / name).exists(), name
+    assert (out_dir / "comparison.csv").exists() and (out_dir / "recall_at_fpr.png").exists()
+    for tag in OBJECTIVE_TAGS:
+        heatmap = "recall_heatmap.png" if tag.startswith("recall") else "f1_heatmap.png"
+        for method in METHOD_NAMES:
+            for name in ("calibration.json", "grid.csv", heatmap):
+                assert (out_dir / tag / method / name).exists(), f"{tag}/{method}/{name}"
+        for name in ("comparison.json", "f1_comparison.png", "pr_comparison.png", "roc_comparison.png"):
+            assert (out_dir / tag / "comparison" / name).exists(), f"{tag}/{name}"
 
-    # регресія: nll збігається з результатом версії до додавання методів
-    result = json.loads((out_dir / "nll" / "calibration.json").read_text(encoding="utf-8"))
-    _assert_close(json.loads(NLL_REFERENCE.read_text(encoding="utf-8")), result)
-    for key in ("method", "row_param", "col_param", "checkpoint", "git_commit", "split_seed", "data_fingerprint",
-                "split", "grid", "selected", "raw_max", "baseline", "sanity", "metrics", "attack_fraction_holdout",
-                "prevalence_rescaled"):
+    result = json.loads((out_dir / "fbeta" / "nll" / "calibration.json").read_text(encoding="utf-8"))
+    for key in ("method", "objective", "beta", "infeasible", "degenerate", "degenerate_holdout", "trivial_fbeta",
+                "record_metrics", "checkpoint", "split", "grid", "selected", "raw_max", "baseline", "sanity", "metrics"):
         assert key in result, key
-    assert (result["method"], result["row_param"], result["col_param"]) == ("nll", "q", "p")
-    assert result["sanity"]["threshold_match"] is True
-    calib, holdout = result["split"]["calib"], result["split"]["holdout"]
-    assert not set(calib["normal"] + calib["abnormal"]) & set(holdout["normal"] + holdout["abnormal"])
-    for name in ("selected", "baseline"):
-        assert set(result["metrics"]["holdout"][name]["ci95"]) == {"f2", "recall", "fpr"}
-    n_rows = len(result["grid"]["q"]) + 1
-    assert len((out_dir / "nll" / "grid.csv").read_text(encoding="utf-8").strip().splitlines()) == 1 + n_rows * 100
+    assert result["beta"] == 1.0 and result["sanity"]["threshold_match"] is True
+    assert result["trivial_fbeta"]["holdout"] == pytest.approx(2 * 0.5 / 1.5)  # F1 тривоги на все при pi = 0.5
+    assert set(result["metrics"]["holdout"]["selected"]["ci95"]) == {"fbeta", "recall", "fpr"}
+    assert len(result["grid"]["p"]) == len(default_p_grid())
+    for key in ("attack_detected", "normal_alarmed", "median_delay_sec", "ci95"):
+        assert key in result["record_metrics"], key
 
-    # інші методи: власні параметри, той самий поділ, без базової лінії
-    for method in ("topk", "run_nll", "run_rank"):
-        other = json.loads((out_dir / method / "calibration.json").read_text(encoding="utf-8"))
-        assert other["method"] == method and other["baseline"] is None
-        assert other["split"] == result["split"]
-        assert set(other["metrics"]["holdout"]) == {"selected"}
-    run = json.loads((out_dir / "run_rank" / "calibration.json").read_text(encoding="utf-8"))
-    assert run["row_param"] == "m" and {"m", "p", "tau", "k_eff", "on_edge"} <= set(run["selected"])
-    run_header = (out_dir / "run_nll" / "grid.csv").read_text(encoding="utf-8").splitlines()[0]
-    assert run_header.startswith("m,p,tau,tp,")
-    assert "k_eff" in (out_dir / "topk" / "grid.csv").read_text(encoding="utf-8").splitlines()[0]
+    # обмеження FPR дотримано на calib
+    for tag, limit in (("fbeta_fpr0.01", 0.01), ("fbeta_fpr0.05", 0.05), ("recall_at_fpr0.01", 0.01)):
+        for method in METHOD_NAMES:
+            r = json.loads((out_dir / tag / method / "calibration.json").read_text(encoding="utf-8"))
+            assert r["infeasible"] or r["metrics"]["calib"]["selected"]["fpr"] <= limit, f"{tag}/{method}"
 
-    comparison = json.loads((out_dir / "comparison" / "comparison.json").read_text(encoding="utf-8"))
+    comparison = json.loads((out_dir / "fbeta" / "comparison" / "comparison.json").read_text(encoding="utf-8"))
     assert [m["method"] for m in comparison["methods"]] == list(METHOD_NAMES)
-    assert comparison["reference_method"] == "nll" and comparison["bootstrap"]["shared_resamples"] is True
+    assert comparison["trivial"]["holdout"]["fbeta"] == pytest.approx(2 / 3)
     nll_entry = comparison["methods"][0]
-    assert nll_entry["delta_f2_vs_nll"] == {"value": 0.0, "ci95": [0.0, 0.0], "significant": False}
-    assert nll_entry["holdout"]["f2"] == pytest.approx(result["metrics"]["holdout"]["selected"]["f2"])
-    for entry in comparison["methods"]:
-        assert 0.0 <= entry["holdout"]["roc_auc"] <= 1.0
-        assert set(entry["holdout"]["ci95"]) == {"f2", "recall", "fpr"}
-    assert comparison["baseline"]["holdout"]["f2"] == pytest.approx(result["metrics"]["holdout"]["baseline"]["f2"])
-    csv_lines = (out_dir / "comparison" / "comparison.csv").read_text(encoding="utf-8").strip().splitlines()
-    assert len(csv_lines) == 1 + 1 + len(METHOD_NAMES)  # шапка, базова лінія, методи
+    if not nll_entry["infeasible"]:
+        assert nll_entry["delta_fbeta_vs_nll"] == {"value": 0.0, "ci95": [0.0, 0.0], "significant": False}
+    tf = comparison["threshold_free"]
+    assert [e["method"] for e in tf] == list(METHOD_NAMES)
+    assert tf[0]["delta_pauc_vs_nll"] == {"value": 0.0, "ci95": [0.0, 0.0], "significant": False}
+    for e in tf:
+        assert 0.0 <= e["pauc"] <= 1.0 and 0.0 <= e["roc_auc"] <= 1.0
+
+    rows = list(csv.DictReader((out_dir / "comparison.csv").open(encoding="utf-8")))
+    assert len(rows) == len(OBJECTIVE_TAGS) * (2 + len(METHOD_NAMES))  # trivial, baseline, методи
+    assert {r["method"] for r in rows} == {"trivial", "baseline", *METHOD_NAMES}
+    assert {r["objective"] for r in rows} == {"fbeta", "recall_at_fpr"}
 
     # повторний запуск бере кеш і дає той самий результат
     mtime = (out_dir / "cache_FIXT.npz").stat().st_mtime_ns
     calibrate.main()
     assert (out_dir / "cache_FIXT.npz").stat().st_mtime_ns == mtime
-    assert json.loads((out_dir / "nll" / "calibration.json").read_text(encoding="utf-8"))["selected"] == result["selected"]
+    again = json.loads((out_dir / "fbeta" / "nll" / "calibration.json").read_text(encoding="utf-8"))
+    assert again["selected"] == result["selected"]
 
-    # копія чекпоінта: лише nll, нові агрегація й поріг, вихідний файл не змінено
+    # копія чекпоінта: nll з першого блоку критерію, вихідний файл не змінено
     calibrated = torch.load(model_dir / "FIXT_f2.pt", map_location="cpu")
     assert calibrated["threshold"] == pytest.approx(result["selected"]["threshold"])
     assert calibrated["calibration"]["selected"] == result["selected"]
-    assert calibrated["calibration"]["method"] == "nll"
     assert result["checkpoint"]["sha256"] == calibrate.sha256_file(str(GOLDEN_DIR / "FIXT.pt"))
 
     # hids-eval працює з копією
@@ -286,20 +319,148 @@ def test_calibrate_end_to_end(tmp_path: Path, monkeypatch) -> None:
     assert len(reported) == 1
 
 
-def test_old_cache_without_ranks_is_recomputed(tmp_path: Path, monkeypatch) -> None:
+def test_old_cache_is_recomputed(tmp_path: Path, monkeypatch) -> None:
     out_dir = _run_calibrate(monkeypatch, tmp_path, ["--methods", "nll", "--bootstrap", "0"])
     cache_path = out_dir / "cache_FIXT.npz"
     with np.load(cache_path, allow_pickle=False) as cached:
-        old = {k: cached[k] for k in cached.files if k not in ("val_rank", "test_rank")}
-    old["cache_version"] = np.array(1)
+        old = {k: cached[k] for k in cached.files if k not in ("val_rank", "test_rank", "test_t_end")}
+    old["cache_version"] = np.array(2)
     np.savez(cache_path, **old)
 
     _run_calibrate(monkeypatch, tmp_path, ["--methods", "run_rank", "--bootstrap", "0"])
     with np.load(cache_path, allow_pickle=False) as cached:
         assert int(cached["cache_version"]) == calibrate.CACHE_VERSION
         assert cached["test_rank"].dtype == np.int32 and cached["test_rank"].shape == cached["test_nll"].shape
-    comparison = json.loads((out_dir / "comparison" / "comparison.json").read_text(encoding="utf-8"))
-    assert comparison["reference_method"] is None and comparison["methods"][0]["delta_f2_vs_nll"] is None
+        assert cached["test_t_end"].shape == (len(cached["test_nll"]),)
+    comparison = json.loads((out_dir / "fbeta" / "comparison" / "comparison.json").read_text(encoding="utf-8"))
+    assert comparison["reference_method"] is None and comparison["methods"][0]["delta_fbeta_vs_nll"] is None
+
+
+def test_window_starts_match_make_sequences() -> None:
+    seq_len = 8
+    for n in [9, 10, 16, 17, 18, 25, 40, 64, 65, 100]:
+        for step in (1, 3, seq_len):
+            rows = np.arange(n, dtype=np.int16)[:, None]
+            X, y = make_sequences(rows, seq_len, step)
+            starts = window_starts(n, seq_len, step)
+            assert len(starts) == len(X), (n, step)
+            np.testing.assert_array_equal(X[:, 0, 0], starts)
+            np.testing.assert_array_equal(y[:, -1, 0], starts + seq_len)  # остання ціль — строка s + seq_len
+    assert len(window_starts(seq_len, seq_len, seq_len)) == 0
+
+
+def test_default_p_grid() -> None:
+    grid = default_p_grid()
+    assert np.all(np.diff(grid) > 0)
+    assert grid[0] == 90.0 and grid[-1] == pytest.approx(99.999)
+    assert 99.0 in grid and 99.9 in grid and (grid > 99.9).sum() == 9
+    assert np.allclose(np.diff(grid[grid <= 99.0]), 0.5)
+
+
+def test_trivial_fbeta_formula() -> None:
+    for pi in (0.1, 0.5, 0.9):
+        y_true = np.r_[np.ones(int(pi * 1000), bool), np.zeros(1000 - int(pi * 1000), bool)]
+        for beta in (1.0, 2.0):
+            assert trivial_fbeta(pi, beta) == pytest.approx(fbeta_score(y_true, np.ones(1000, bool), beta=beta))
+
+
+def test_build_objectives() -> None:
+    tags = [o.tag for o in build_objectives(["fbeta", "recall_at_fpr"], [0.01, 0.05])]
+    assert tags == ["fbeta", "fbeta_fpr0.01", "fbeta_fpr0.05", "recall_at_fpr0.01", "recall_at_fpr0.05"]
+    # без --max_fpr: fbeta без обмеження, recall_at_fpr — 0.01 і 0.05 за замовчуванням
+    assert [o.tag for o in build_objectives(["fbeta", "recall_at_fpr"], None)] == \
+        ["fbeta", "recall_at_fpr0.01", "recall_at_fpr0.05"]
+
+
+def _two_group_scores(rng, signal: bool):
+    """Половина атак: 70% чітко вищі за норму (якщо signal), решта — як норма. pi = 0.5."""
+    val = rng.normal(0.0, 1.0, size=(4000, 1))
+    normal = rng.normal(0.0, 1.0, size=(2000, 1))
+    attack = rng.normal(0.0, 1.0, size=(2000, 1))
+    if signal:
+        attack[:1400] += 6.0
+    return val, np.concatenate([normal, attack]), np.r_[np.zeros(2000, bool), np.ones(2000, bool)]
+
+
+P_LOW_HIGH = np.array([0.5, 1.0, 1.5, 2.0, 97.0, 98.0, 99.0, 99.5])
+
+
+def _select(val, test, is_attack, objective: Objective, beta: float):
+    grid = grid_search(val, test, is_attack, [1.0], P_LOW_HIGH, beta)
+    score, feasible, tiebreak = objective_grid(grid, objective, beta, prevalence=0.01)
+    return grid, smooth_select(score, None, feasible, tiebreak)
+
+
+def test_f1_avoids_trivial_point_that_f2_prefers() -> None:
+    val, test, is_attack = _two_group_scores(np.random.default_rng(0), signal=True)
+    pi = is_attack.mean()
+    grid2, (sel2, _, _) = _select(val, test, is_attack, Objective("fbeta"), beta=2.0)
+    grid1, (sel1, _, _) = _select(val, test, is_attack, Objective("fbeta"), beta=1.0)
+    # F2: максимум у зоні «тривога майже на все», і вона вироджена
+    assert grid2["fpr"][sel2] > 0.5
+    assert is_degenerate(grid2["fpr"][sel2], grid2["fbeta"][sel2], trivial_fbeta(pi, 2.0))
+    # F1: змістовна точка з низьким FPR і F1 помітно вище тривіального рівня
+    assert grid1["fpr"][sel1] < 0.05
+    assert not is_degenerate(grid1["fpr"][sel1], grid1["fbeta"][sel1], trivial_fbeta(pi, 1.0))
+
+
+def test_degenerate_without_signal() -> None:
+    val, test, is_attack = _two_group_scores(np.random.default_rng(1), signal=False)
+    grid, (sel, _, _) = _select(val, test, is_attack, Objective("fbeta"), beta=1.0)
+    assert is_degenerate(grid["fpr"][sel], grid["fbeta"][sel], trivial_fbeta(is_attack.mean(), 1.0))
+
+
+def test_max_fpr_constraint_and_infeasible() -> None:
+    val, test, is_attack = _two_group_scores(np.random.default_rng(2), signal=True)
+    for kind in ("fbeta", "recall_at_fpr"):
+        grid, (sel, raw, _) = _select(val, test, is_attack, Objective(kind, 0.02), beta=1.0)
+        assert grid["fpr"][sel] <= 0.02 and grid["fpr"][raw] <= 0.02
+    # лише низькі пороги (FPR ~ 0.98+): допустимих точок немає
+    grid = grid_search(val, test, is_attack, [1.0], P_LOW_HIGH[:4], 1.0)
+    score, feasible, tiebreak = objective_grid(grid, Objective("fbeta", 0.01), 1.0, 0.01)
+    assert smooth_select(score, None, feasible, tiebreak) is None
+
+
+def test_smooth_select_feasible_mask_and_tiebreak() -> None:
+    score = np.full((3, 6), 0.3)
+    score[1, 4] = 0.9  # найкраща точка, але недопустима
+    feasible = np.ones((3, 6), bool)
+    feasible[1, 4] = False
+    (sel, raw, smoothed) = smooth_select(score, None, feasible)
+    assert sel != (1, 4) and raw != (1, 4)
+    assert np.isclose(smoothed[1, 3], 0.3)  # недопустимий сусід не впливає на згладження
+    # tiebreak: за рівного значення — менший FPR
+    recall = np.full((1, 4), 0.5)
+    fpr = np.array([[0.04, 0.01, 0.03, 0.02]])
+    (sel, _, _) = smooth_select(recall, None, None, fpr)
+    assert sel == (0, 1)
+
+
+def test_pauc_matches_sklearn_and_unit_bootstrap() -> None:
+    rng = np.random.default_rng(5)
+    rec_idx = np.repeat(np.arange(8), 50)
+    is_attack = rec_idx >= 4
+    scores = rng.normal(size=len(rec_idx)) + is_attack * 0.8
+    assert pauc(is_attack, scores) == pytest.approx(roc_auc_score(is_attack, scores, max_fpr=0.05))
+    identity = np.arange(8)[None, :]  # ресемпл, де кожна запис узята рівно один раз
+    assert bootstrap_auc(scores, is_attack, rec_idx, np.arange(8), identity)[0] == pytest.approx(pauc(is_attack, scores))
+
+
+def test_record_metrics_manual() -> None:
+    # записи 0,1 — нормальні; 2,3,4 — атакувальні; по 3 вікна, t_end = 1, 2, 3 с
+    rec_idx = np.repeat(np.arange(5), 3)
+    is_attack = rec_idx >= 2
+    t_end = np.tile([1.0, 2.0, 3.0], 5)
+    alarm = np.zeros(15, bool)
+    alarm[1] = True  # нормальна 0: тривога
+    alarm[[7, 8]] = True  # атака 2: перша тривога на 2-му вікні (2 с)
+    alarm[[9]] = True  # атака 3: перша тривога на 1-му вікні (1 с); атака 4 без тривог
+    alarmed, attack, delay = record_flags(alarm, is_attack, rec_idx, t_end, np.arange(5))
+    m = record_metrics(alarmed, attack, delay)
+    assert m["attack_detected"] == pytest.approx(2 / 3)
+    assert m["normal_alarmed"] == pytest.approx(1 / 2)
+    assert m["median_delay_sec"] == pytest.approx(1.5)
+    assert (m["n_attack_records"], m["n_detected"], m["n_normal_records"]) == (3, 2, 2)
 
 
 def test_write_checkpoint_requires_nll(tmp_path: Path, monkeypatch) -> None:
