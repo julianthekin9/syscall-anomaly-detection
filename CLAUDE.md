@@ -6,6 +6,7 @@
 - Отвечай мне на русском.
 - Комментарии в коде и docstring пиши на украинском.
 - Тексты для диплома: сжатая, фактическая научная украинская проза без markdown-разметки (текст потом переформатируется другим инструментом). В блок-схемах только описательный текст, без имён переменных и ссылок на код.
+- Усі підписи на графіках (заголовки, осі, легенди) — українською; назви метрик латиницею.
 
 ## Структура
 Идёт переезд в пакет `syscall_hids` по образцу mace-torch. План, целевая структура и этапы: `docs/RESTRUCTURE.md`. Работая над реструктуризацией, сначала прочитай этот файл и делай только текущий этап.
@@ -57,6 +58,7 @@
 - Все параметры и умолчания: `hids-train --help`
 - Повтор запуска: `hids-train --config {model_dir}/<сценарий>_config.yaml` (итоговая конфигурация пишется рядом с моделью и в чекпоинт, ключ `train_args`)
 - Оффлайн-оценка: `hids-eval --config configs/php_cwe_434.yaml --service <сценарий> --log <файл.sc>` или `--eval-test-split`
+- Калибровка q и p под F2 (calib/holdout по записям, кеш NLL по шагам): `hids-calibrate --config configs/php_cwe_434.yaml --service <сценарий> [--write_checkpoint]` → `{work_dir}/calibration/<сценарий>/` (`calibration.json`, `grid.csv`, `f2_heatmap.png`, `pr_curve_holdout.png`); копия модели `{model_dir}/<сценарий>_f2.pt`, оценка копии: `hids-eval --service <сценарий> --checkpoint {model_dir}/<сценарий>_f2.pt --eval-test-split`
 - Кривые обучения из файла метрик: `hids-plot-train --results results/hids_<сценарий>_run-123_train.txt [--out curves.png]`
 - Realtime (root): `sudo hids-detect --service <сценарий> --container <контейнер>`
 - Тесты: `pytest tests/`
