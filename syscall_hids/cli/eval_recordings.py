@@ -6,6 +6,7 @@ Usage:
 """
 
 import logging
+from pathlib import Path
 
 import torch
 from torch.utils.data import DataLoader
@@ -72,6 +73,7 @@ def main() -> None:
     # quick_test_evaluation and plot_roc_curve write via logging: print to the console as before
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = build_eval_arg_parser(description=__doc__)
+    parser.add_argument("--checkpoint", default=None, help="Explicit path to the .pt (default: {model_dir}/<service>.pt)")
     args = parser.parse_args()
 
     if not args.log and not args.eval_test_split:
@@ -85,7 +87,11 @@ def main() -> None:
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, checkpoint = load_model(args.service, device, args.model_dir)
+    if args.checkpoint:
+        checkpoint_path = Path(args.checkpoint)
+        model, checkpoint = load_model(checkpoint_path.stem, device, str(checkpoint_path.parent))
+    else:
+        model, checkpoint = load_model(args.service, device, args.model_dir)
     threshold = checkpoint["threshold"]
 
     if args.log:
