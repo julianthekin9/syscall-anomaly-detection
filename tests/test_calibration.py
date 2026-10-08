@@ -9,13 +9,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
-from sklearn.metrics import fbeta_score, roc_auc_score
+from sklearn.metrics import balanced_accuracy_score, fbeta_score, matthews_corrcoef, roc_auc_score
 
 from syscall_hids.cli import calibrate, eval_recordings
 from syscall_hids.tools import evaluation
 from syscall_hids.data.sequences import make_sequences
 from syscall_hids.tools.calibration import (
     METHOD_NAMES,
+    OBJECTIVE_KINDS,
+    CriterionParams,
     Objective,
     aggregate,
     bootstrap_auc,
@@ -23,6 +25,8 @@ from syscall_hids.tools.calibration import (
     bootstrap_samples,
     build_objectives,
     confusion_at_threshold,
+    cost_metrics,
+    criterion_value,
     default_p_grid,
     edge_flags,
     fbeta,
@@ -42,11 +46,13 @@ from syscall_hids.tools.calibration import (
     split_recordings,
     step_ranks,
     trivial_fbeta,
+    trivial_values,
     window_starts,
 )
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 REFERENCE = GOLDEN_DIR / "calibrate_reference.json"
+RECALL_AT_FPR_REFERENCE = GOLDEN_DIR / "calibrate_recall_at_fpr_reference.json"
 
 
 @pytest.mark.parametrize("beta", [0.5, 1.0, 2.0])
@@ -267,7 +273,7 @@ def test_calibrate_end_to_end(tmp_path: Path, monkeypatch) -> None:
         assert key in result, key
     assert result["beta"] == 1.0 and result["sanity"]["threshold_match"] is True
     assert result["trivial_fbeta"]["holdout"] == pytest.approx(2 * 0.5 / 1.5)  # F1 тривоги на все при pi = 0.5
-    assert set(result["metrics"]["holdout"]["selected"]["ci95"]) == {"fbeta", "recall", "fpr"}
+    assert set(result["metrics"]["holdout"]["selected"]["ci95"]) == {"fbeta", "f1", "mcc", "youden", "recall", "fpr"}
     assert len(result["grid"]["p"]) == len(default_p_grid())
     for key in ("attack_detected", "normal_alarmed", "median_delay_sec", "ci95"):
         assert key in result["record_metrics"], key
@@ -291,8 +297,14 @@ def test_calibrate_end_to_end(tmp_path: Path, monkeypatch) -> None:
         assert 0.0 <= e["pauc"] <= 1.0 and 0.0 <= e["roc_auc"] <= 1.0
 
     rows = list(csv.DictReader((out_dir / "comparison.csv").open(encoding="utf-8")))
-    assert len(rows) == len(OBJECTIVE_TAGS) * (2 + len(METHOD_NAMES))  # trivial, baseline, методи
-    assert {r["method"] for r in rows} == {"trivial", "baseline", *METHOD_NAMES}
+    assert len(rows) == len(OBJECTIVE_TAGS) * (3 + len(METHOD_NAMES))  # all_alarm, no_alarm, baseline, методи
+    assert {r["method"] for r in rows} == {"all_alarm", "no_alarm", "baseline", *METHOD_NAMES}
+
+    # регресія recall_at_fpr: обрані точки й метрики ті самі, що до узагальнення критеріїв
+    # (прапор degenerate не порівнюється: його зміст для recall_at_fpr змінено навмисно)
+    for key, expected in json.loads(RECALL_AT_FPR_REFERENCE.read_text(encoding="utf-8")).items():
+        actual = json.loads((out_dir / key / "calibration.json").read_text(encoding="utf-8"))
+        _assert_close(expected, actual, key)
     assert {r["objective"] for r in rows} == {"fbeta", "recall_at_fpr"}
 
     # повторний запуск бере кеш і дає той самий результат
@@ -385,40 +397,155 @@ def _two_group_scores(rng, signal: bool):
 P_LOW_HIGH = np.array([0.5, 1.0, 1.5, 2.0, 97.0, 98.0, 99.0, 99.5])
 
 
-def _select(val, test, is_attack, objective: Objective, beta: float):
-    grid = grid_search(val, test, is_attack, [1.0], P_LOW_HIGH, beta)
-    score, feasible, tiebreak = objective_grid(grid, objective, beta, prevalence=0.01)
+def _select(val, test, is_attack, objective: Objective, beta: float, p_grid=P_LOW_HIGH, params=None):
+    params = params or CriterionParams(beta=beta)
+    grid = grid_search(val, test, is_attack, [1.0], p_grid, beta)
+    score, feasible, tiebreak, _ = objective_grid(grid, objective, params)
     return grid, smooth_select(score, None, feasible, tiebreak)
+
+
+def _degenerate(grid, ij, objective: Objective, is_attack: np.ndarray, beta: float) -> bool:
+    params = CriterionParams(beta=beta)
+    conf = [grid[k][ij] for k in ("tp", "fp", "fn", "tn")]
+    trivial = trivial_values(objective, int(is_attack.sum()), int((~is_attack).sum()), params)
+    return is_degenerate(objective, criterion_value(objective, *conf, params), grid["fpr"][ij], trivial)
 
 
 def test_f1_avoids_trivial_point_that_f2_prefers() -> None:
     val, test, is_attack = _two_group_scores(np.random.default_rng(0), signal=True)
-    pi = is_attack.mean()
     grid2, (sel2, _, _) = _select(val, test, is_attack, Objective("fbeta"), beta=2.0)
     grid1, (sel1, _, _) = _select(val, test, is_attack, Objective("fbeta"), beta=1.0)
     # F2: максимум у зоні «тривога майже на все», і вона вироджена
     assert grid2["fpr"][sel2] > 0.5
-    assert is_degenerate(grid2["fpr"][sel2], grid2["fbeta"][sel2], trivial_fbeta(pi, 2.0))
+    assert _degenerate(grid2, sel2, Objective("fbeta"), is_attack, 2.0)
     # F1: змістовна точка з низьким FPR і F1 помітно вище тривіального рівня
     assert grid1["fpr"][sel1] < 0.05
-    assert not is_degenerate(grid1["fpr"][sel1], grid1["fbeta"][sel1], trivial_fbeta(pi, 1.0))
+    assert not _degenerate(grid1, sel1, Objective("fbeta"), is_attack, 1.0)
 
 
 def test_degenerate_without_signal() -> None:
     val, test, is_attack = _two_group_scores(np.random.default_rng(1), signal=False)
     grid, (sel, _, _) = _select(val, test, is_attack, Objective("fbeta"), beta=1.0)
-    assert is_degenerate(grid["fpr"][sel], grid["fbeta"][sel], trivial_fbeta(is_attack.mean(), 1.0))
+    assert _degenerate(grid, sel, Objective("fbeta"), is_attack, 1.0)
 
 
-def test_max_fpr_constraint_and_infeasible() -> None:
+def test_max_fpr_constraint_for_every_criterion_and_infeasible() -> None:
     val, test, is_attack = _two_group_scores(np.random.default_rng(2), signal=True)
-    for kind in ("fbeta", "recall_at_fpr"):
+    for kind in OBJECTIVE_KINDS:
         grid, (sel, raw, _) = _select(val, test, is_attack, Objective(kind, 0.02), beta=1.0)
-        assert grid["fpr"][sel] <= 0.02 and grid["fpr"][raw] <= 0.02
+        assert grid["fpr"][sel] <= 0.02 and grid["fpr"][raw] <= 0.02, kind
     # лише низькі пороги (FPR ~ 0.98+): допустимих точок немає
     grid = grid_search(val, test, is_attack, [1.0], P_LOW_HIGH[:4], 1.0)
-    score, feasible, tiebreak = objective_grid(grid, Objective("fbeta", 0.01), 1.0, 0.01)
+    score, feasible, tiebreak, _ = objective_grid(grid, Objective("fbeta", 0.01), CriterionParams())
     assert smooth_select(score, None, feasible, tiebreak) is None
+
+
+def test_criteria_values_match_sklearn_and_manual() -> None:
+    rng = np.random.default_rng(7)
+    params = CriterionParams(beta=1.0, cost_fn=10.0, cost_fp=1.0)
+    for _ in range(30):
+        y_true = rng.random(300) < rng.uniform(0.1, 0.9)
+        y_pred = rng.random(300) < rng.uniform(0.05, 0.95)
+        tp, fp = int((y_true & y_pred).sum()), int((~y_true & y_pred).sum())
+        fn, tn = int((y_true & ~y_pred).sum()), int((~y_true & ~y_pred).sum())
+        tpr, fpr = tp / (tp + fn), fp / (fp + tn)
+        value = lambda kind: criterion_value(Objective(kind), tp, fp, fn, tn, params)  # noqa: E731
+        assert value("mcc") == pytest.approx(matthews_corrcoef(y_true, y_pred), abs=1e-12)
+        assert value("youden") == pytest.approx(2 * balanced_accuracy_score(y_true, y_pred) - 1, abs=1e-12)
+        assert value("gmean") == pytest.approx(np.sqrt(tpr * (1 - fpr)), abs=1e-12)
+        assert value("eer") == pytest.approx(abs(fpr - (1 - tpr)), abs=1e-12)
+        assert value("cost") == pytest.approx((10 * fn + fp) / 300, abs=1e-12)
+        assert value("fbeta") == pytest.approx(fbeta_score(y_true, y_pred, beta=1.0, zero_division=0), abs=1e-12)
+    # MCC з нульовим знаменником = 0 (усі передбачення одного класу)
+    assert criterion_value(Objective("mcc"), 10, 5, 0, 0, params) == 0.0
+    assert float(cost_metrics(1, 2, 3, 4, 10.0, 1.0)["cost_per_window"]) == pytest.approx(32 / 10)
+
+
+def test_trivial_values_and_generalized_degenerate() -> None:
+    params = CriterionParams(beta=1.0, cost_fn=10.0, cost_fp=1.0)
+    t = lambda kind, limit=None: trivial_values(Objective(kind, limit), 60, 40, params)  # noqa: E731
+    assert t("fbeta") == pytest.approx({"all_alarm": 0.75, "no_alarm": 0.0})
+    for kind in ("youden", "mcc", "gmean"):
+        assert t(kind) == pytest.approx({"all_alarm": 0.0, "no_alarm": 0.0}), kind
+    assert t("eer") == pytest.approx({"all_alarm": 1.0, "no_alarm": 1.0})
+    assert t("cost") == pytest.approx({"all_alarm": 0.4, "no_alarm": 6.0})
+    # максимізація: не краще за найкращий тривіальний детектор більш ніж на margin
+    assert is_degenerate(Objective("fbeta"), 0.70, 0.2, t("fbeta"))
+    assert not is_degenerate(Objective("fbeta"), 0.80, 0.2, t("fbeta"))
+    assert is_degenerate(Objective("youden"), 0.005, 0.2, t("youden"))
+    assert not is_degenerate(Objective("youden"), 0.2, 0.2, t("youden"))
+    # мінімізація (cost): найкращий тривіальний — «тривога на все» з вартістю 0.4 на вікно
+    assert not is_degenerate(Objective("cost"), 0.30, 0.2, t("cost"))
+    assert is_degenerate(Objective("cost"), 0.395, 0.2, t("cost"))
+    # з обмеженням FPR «тривога на все» недопустима: recall порівнюється лише з «жодної тривоги» (0)
+    assert not is_degenerate(Objective("recall_at_fpr", 0.05), 0.3, 0.04, t("recall_at_fpr", 0.05))
+    assert is_degenerate(Objective("recall_at_fpr", 0.05), 0.005, 0.04, t("recall_at_fpr", 0.05))
+    # FPR(calib) > 0.5 — вироджено незалежно від значення
+    assert is_degenerate(Objective("youden"), 0.3, 0.6, t("youden"))
+
+
+def _weak_signal_scores(rng, n: int = 20000, shift: float = 0.5):
+    """Збалансований тест зі слабким сигналом: атаки ~ N(shift, 1), норма ~ N(0, 1)."""
+    val = rng.normal(0.0, 1.0, size=(n, 1))
+    test = np.concatenate([rng.normal(0.0, 1.0, size=(n, 1)), rng.normal(shift, 1.0, size=(n, 1))])
+    return val, test, np.r_[np.zeros(n, bool), np.ones(n, bool)]
+
+
+P_FINE = np.round(np.arange(1.0, 99.5 + 0.25, 0.5), 6)
+
+
+def test_balanced_criteria_do_not_collapse_to_alarm_on_all() -> None:
+    val, test, is_attack = _weak_signal_scores(np.random.default_rng(3))
+    grid2, (sel2, _, _) = _select(val, test, is_attack, Objective("fbeta"), 2.0, P_FINE)
+    assert grid2["fpr"][sel2] > 0.5 and _degenerate(grid2, sel2, Objective("fbeta"), is_attack, 2.0)
+    for kind in ("youden", "gmean", "mcc"):
+        grid, (sel, _, _) = _select(val, test, is_attack, Objective(kind), 1.0, P_FINE)
+        assert grid["fpr"][sel] < 0.5, kind
+        assert not _degenerate(grid, sel, Objective(kind), is_attack, 1.0), kind
+
+
+def test_eer_point_has_equal_error_rates() -> None:
+    val, test, is_attack = _weak_signal_scores(np.random.default_rng(4), n=50000, shift=1.0)
+    grid, (_, raw, _) = _select(val, test, is_attack, Objective("eer"), 1.0, P_FINE)
+    step = 0.005  # крок сітки p 0.5% ≈ крок FPR
+    assert abs(grid["fpr"][raw] - grid["fnr"][raw]) < step
+    assert grid["fpr"][raw] == pytest.approx(0.3085, abs=0.01)  # FPR = FNR = Φ(−0.5) для N(0,1) проти N(1,1)
+
+
+def test_cost_with_equal_costs_minimizes_error_count() -> None:
+    val, test, is_attack = _weak_signal_scores(np.random.default_rng(5))
+    params = CriterionParams(cost_fn=1.0, cost_fp=1.0)
+    grid, (_, raw, _) = _select(val, test, is_attack, Objective("cost"), 1.0, P_FINE, params)
+    errors = grid["fn"] + grid["fp"]
+    assert errors[raw] == errors.min()
+
+
+def test_calibrate_all_criteria_end_to_end(tmp_path: Path, monkeypatch) -> None:
+    out_dir = _run_calibrate(monkeypatch, tmp_path, [
+        "--objective", "fbeta", "youden", "mcc", "gmean", "eer", "cost", "recall_at_fpr", "--max_fpr", "0.05",
+        "--bootstrap", "50",
+    ])
+    kinds = ("fbeta", "youden", "mcc", "gmean", "eer", "cost")
+    tags = [*kinds, *(f"{k}_fpr0.05" for k in kinds), "recall_at_fpr0.05"]
+    for tag in tags:
+        assert (out_dir / tag / "comparison" / "comparison.json").exists(), tag
+        r = json.loads((out_dir / tag / "nll" / "calibration.json").read_text(encoding="utf-8"))
+        expected_key = "recall_at_fpr" if tag.startswith("recall_at_fpr") else tag.removesuffix("_fpr0.05")
+        assert r["criterion"]["key"] == expected_key
+        assert set(r["trivial_criterion"]["holdout"]) == {"all_alarm", "no_alarm"}
+        if not r["infeasible"]:
+            for key in ("mcc", "youden", "gmean", "fnr", "cost", "cost_per_window"):
+                assert key in r["metrics"]["holdout"]["selected"], (tag, key)
+    for name in ("comparison.csv", "operating_points_roc.png", "criteria_comparison.png"):
+        assert (out_dir / name).exists(), name
+    rows = list(csv.DictReader((out_dir / "comparison.csv").open(encoding="utf-8")))
+    assert len(rows) == len(tags) * (3 + len(METHOD_NAMES))
+    assert {r["service"] for r in rows} == {"FIXT"}
+    for col in ("mcc", "youden", "gmean", "cost", "cost_per_window", "criterion_value", "f1_lo", "mcc_hi"):
+        assert col in rows[0], col
+
+
+
 
 
 def test_smooth_select_feasible_mask_and_tiebreak() -> None:

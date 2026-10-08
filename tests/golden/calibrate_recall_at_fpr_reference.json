@@ -1,0 +1,871 @@
+{
+  "recall_at_fpr0.01/nll": {
+    "infeasible": false,
+    "selected": {
+      "window_agg": "quantile",
+      "q": 0.9,
+      "p": 90.0,
+      "threshold": 4.124237871170044,
+      "fbeta": 0.43902439024390244,
+      "fpr_calib": 0.0,
+      "score": 0.28125,
+      "score_smoothed": 0.25,
+      "on_edge": {
+        "row": false,
+        "col": true
+      }
+    },
+    "raw_max": {
+      "window_agg": "quantile",
+      "q": 0.9,
+      "p": 90.0,
+      "threshold": 4.124237871170044,
+      "fbeta": 0.43902439024390244,
+      "fpr_calib": 0.0,
+      "score": 0.28125
+    },
+    "metrics": {
+      "calib": {
+        "selected": {
+          "tp": 9,
+          "fp": 0,
+          "fn": 23,
+          "tn": 32,
+          "precision": 1.0,
+          "recall": 0.28125,
+          "fpr": 0.0,
+          "f1": 0.43902439024390244,
+          "fbeta": 0.43902439024390244
+        },
+        "baseline": {
+          "tp": 2,
+          "fp": 0,
+          "fn": 30,
+          "tn": 32,
+          "precision": 1.0,
+          "recall": 0.0625,
+          "fpr": 0.0,
+          "f1": 0.11764705882352941,
+          "fbeta": 0.11764705882352941
+        }
+      },
+      "holdout": {
+        "selected": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 16,
+          "tn": 16,
+          "precision": 0.0,
+          "recall": 0.0,
+          "fpr": 0.0,
+          "f1": 0.0,
+          "fbeta": 0.0,
+          "roc_auc": 0.48046875,
+          "ci95": {
+            "fbeta": [
+              0.0,
+              0.0
+            ],
+            "recall": [
+              0.0,
+              0.0
+            ],
+            "fpr": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "baseline": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 16,
+          "tn": 16,
+          "precision": 0.0,
+          "recall": 0.0,
+          "fpr": 0.0,
+          "f1": 0.0,
+          "fbeta": 0.0,
+          "roc_auc": 0.48046875,
+          "ci95": {
+            "fbeta": [
+              0.0,
+              0.0
+            ],
+            "recall": [
+              0.0,
+              0.0
+            ],
+            "fpr": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      }
+    },
+    "prevalence_rescaled": {
+      "prevalence": 0.01,
+      "selected": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "fbeta": 0.0
+      },
+      "baseline": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "fbeta": 0.0
+      }
+    },
+    "record_metrics": {
+      "attack_detected": 0.0,
+      "normal_alarmed": 0.0,
+      "median_delay_sec": null,
+      "n_attack_records": 1,
+      "n_detected": 0,
+      "n_normal_records": 1,
+      "ci95": {
+        "attack_detected": [
+          0.0,
+          0.0
+        ],
+        "normal_alarmed": [
+          0.0,
+          0.0
+        ],
+        "median_delay_sec": null
+      }
+    }
+  },
+  "recall_at_fpr0.01/topk": {
+    "infeasible": false,
+    "selected": {
+      "window_agg": "quantile",
+      "q": 0.99,
+      "p": 95.5,
+      "threshold": 51.57129999999998,
+      "k_eff": 51,
+      "fbeta": 0.2222222222222222,
+      "fpr_calib": 0.0,
+      "score": 0.125,
+      "score_smoothed": 0.10267857142857142,
+      "on_edge": {
+        "row": false,
+        "col": false
+      }
+    },
+    "raw_max": {
+      "window_agg": "quantile",
+      "q": 0.95,
+      "p": 95.5,
+      "threshold": 49.21675,
+      "k_eff": 49,
+      "fbeta": 0.2702702702702703,
+      "fpr_calib": 0.0,
+      "score": 0.15625
+    },
+    "metrics": {
+      "calib": {
+        "selected": {
+          "tp": 4,
+          "fp": 0,
+          "fn": 28,
+          "tn": 32,
+          "precision": 1.0,
+          "recall": 0.125,
+          "fpr": 0.0,
+          "f1": 0.2222222222222222,
+          "fbeta": 0.2222222222222222
+        }
+      },
+      "holdout": {
+        "selected": {
+          "tp": 1,
+          "fp": 1,
+          "fn": 15,
+          "tn": 15,
+          "precision": 0.5,
+          "recall": 0.0625,
+          "fpr": 0.0625,
+          "f1": 0.1111111111111111,
+          "fbeta": 0.1111111111111111,
+          "roc_auc": 0.3828125,
+          "ci95": {
+            "fbeta": [
+              0.1111111111111111,
+              0.1111111111111111
+            ],
+            "recall": [
+              0.0625,
+              0.0625
+            ],
+            "fpr": [
+              0.0625,
+              0.0625
+            ]
+          }
+        }
+      }
+    },
+    "prevalence_rescaled": {
+      "prevalence": 0.01,
+      "selected": {
+        "precision": 0.01,
+        "recall": 0.0625,
+        "fbeta": 0.01724137931034483
+      }
+    },
+    "record_metrics": {
+      "attack_detected": 1.0,
+      "normal_alarmed": 1.0,
+      "median_delay_sec": 0.0012612342834472656,
+      "n_attack_records": 1,
+      "n_detected": 1,
+      "n_normal_records": 1,
+      "ci95": {
+        "attack_detected": [
+          1.0,
+          1.0
+        ],
+        "normal_alarmed": [
+          1.0,
+          1.0
+        ],
+        "median_delay_sec": [
+          0.0012612342834472656,
+          0.0012612342834472656
+        ]
+      }
+    }
+  },
+  "recall_at_fpr0.01/run_nll": {
+    "infeasible": false,
+    "selected": {
+      "m": 5,
+      "p": 90.0,
+      "tau": 4.11893892288208,
+      "rule": "R >= m",
+      "fbeta": 0.4,
+      "fpr_calib": 0.0,
+      "score": 0.25,
+      "score_smoothed": 0.234375,
+      "on_edge": {
+        "row": false,
+        "col": true
+      }
+    },
+    "raw_max": {
+      "m": 5,
+      "p": 90.0,
+      "tau": 4.11893892288208,
+      "rule": "R >= m",
+      "fbeta": 0.4,
+      "fpr_calib": 0.0,
+      "score": 0.25
+    },
+    "metrics": {
+      "calib": {
+        "selected": {
+          "tp": 8,
+          "fp": 0,
+          "fn": 24,
+          "tn": 32,
+          "precision": 1.0,
+          "recall": 0.25,
+          "fpr": 0.0,
+          "f1": 0.4,
+          "fbeta": 0.4
+        }
+      },
+      "holdout": {
+        "selected": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 16,
+          "tn": 16,
+          "precision": 0.0,
+          "recall": 0.0,
+          "fpr": 0.0,
+          "f1": 0.0,
+          "fbeta": 0.0,
+          "roc_auc": 0.595703125,
+          "ci95": {
+            "fbeta": [
+              0.0,
+              0.0
+            ],
+            "recall": [
+              0.0,
+              0.0
+            ],
+            "fpr": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      }
+    },
+    "prevalence_rescaled": {
+      "prevalence": 0.01,
+      "selected": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "fbeta": 0.0
+      }
+    },
+    "record_metrics": {
+      "attack_detected": 0.0,
+      "normal_alarmed": 0.0,
+      "median_delay_sec": null,
+      "n_attack_records": 1,
+      "n_detected": 0,
+      "n_normal_records": 1,
+      "ci95": {
+        "attack_detected": [
+          0.0,
+          0.0
+        ],
+        "normal_alarmed": [
+          0.0,
+          0.0
+        ],
+        "median_delay_sec": null
+      }
+    }
+  },
+  "recall_at_fpr0.01/run_rank": {
+    "infeasible": false,
+    "selected": {
+      "m": 1,
+      "p": 99.6,
+      "tau": 52.0,
+      "k_eff": 52,
+      "rule": "R >= m",
+      "fbeta": 0.17142857142857143,
+      "fpr_calib": 0.0,
+      "score": 0.09375,
+      "score_smoothed": 0.05625,
+      "on_edge": {
+        "row": true,
+        "col": false
+      }
+    },
+    "raw_max": {
+      "m": 2,
+      "p": 99.5,
+      "tau": 51.0,
+      "k_eff": 51,
+      "rule": "R >= m",
+      "fbeta": 0.2222222222222222,
+      "fpr_calib": 0.0,
+      "score": 0.125
+    },
+    "metrics": {
+      "calib": {
+        "selected": {
+          "tp": 3,
+          "fp": 0,
+          "fn": 29,
+          "tn": 32,
+          "precision": 1.0,
+          "recall": 0.09375,
+          "fpr": 0.0,
+          "f1": 0.17142857142857143,
+          "fbeta": 0.17142857142857143
+        }
+      },
+      "holdout": {
+        "selected": {
+          "tp": 1,
+          "fp": 1,
+          "fn": 15,
+          "tn": 15,
+          "precision": 0.5,
+          "recall": 0.0625,
+          "fpr": 0.0625,
+          "f1": 0.1111111111111111,
+          "fbeta": 0.1111111111111111,
+          "roc_auc": 0.5,
+          "ci95": {
+            "fbeta": [
+              0.1111111111111111,
+              0.1111111111111111
+            ],
+            "recall": [
+              0.0625,
+              0.0625
+            ],
+            "fpr": [
+              0.0625,
+              0.0625
+            ]
+          }
+        }
+      }
+    },
+    "prevalence_rescaled": {
+      "prevalence": 0.01,
+      "selected": {
+        "precision": 0.01,
+        "recall": 0.0625,
+        "fbeta": 0.01724137931034483
+      }
+    },
+    "record_metrics": {
+      "attack_detected": 1.0,
+      "normal_alarmed": 1.0,
+      "median_delay_sec": 0.0012612342834472656,
+      "n_attack_records": 1,
+      "n_detected": 1,
+      "n_normal_records": 1,
+      "ci95": {
+        "attack_detected": [
+          1.0,
+          1.0
+        ],
+        "normal_alarmed": [
+          1.0,
+          1.0
+        ],
+        "median_delay_sec": [
+          0.0012612342834472656,
+          0.0012612342834472656
+        ]
+      }
+    }
+  },
+  "recall_at_fpr0.05/nll": {
+    "infeasible": false,
+    "selected": {
+      "window_agg": "quantile",
+      "q": 0.9,
+      "p": 90.0,
+      "threshold": 4.124237871170044,
+      "fbeta": 0.43902439024390244,
+      "fpr_calib": 0.0,
+      "score": 0.28125,
+      "score_smoothed": 0.25,
+      "on_edge": {
+        "row": false,
+        "col": true
+      }
+    },
+    "raw_max": {
+      "window_agg": "quantile",
+      "q": 0.9,
+      "p": 90.0,
+      "threshold": 4.124237871170044,
+      "fbeta": 0.43902439024390244,
+      "fpr_calib": 0.0,
+      "score": 0.28125
+    },
+    "metrics": {
+      "calib": {
+        "selected": {
+          "tp": 9,
+          "fp": 0,
+          "fn": 23,
+          "tn": 32,
+          "precision": 1.0,
+          "recall": 0.28125,
+          "fpr": 0.0,
+          "f1": 0.43902439024390244,
+          "fbeta": 0.43902439024390244
+        },
+        "baseline": {
+          "tp": 2,
+          "fp": 0,
+          "fn": 30,
+          "tn": 32,
+          "precision": 1.0,
+          "recall": 0.0625,
+          "fpr": 0.0,
+          "f1": 0.11764705882352941,
+          "fbeta": 0.11764705882352941
+        }
+      },
+      "holdout": {
+        "selected": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 16,
+          "tn": 16,
+          "precision": 0.0,
+          "recall": 0.0,
+          "fpr": 0.0,
+          "f1": 0.0,
+          "fbeta": 0.0,
+          "roc_auc": 0.48046875,
+          "ci95": {
+            "fbeta": [
+              0.0,
+              0.0
+            ],
+            "recall": [
+              0.0,
+              0.0
+            ],
+            "fpr": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "baseline": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 16,
+          "tn": 16,
+          "precision": 0.0,
+          "recall": 0.0,
+          "fpr": 0.0,
+          "f1": 0.0,
+          "fbeta": 0.0,
+          "roc_auc": 0.48046875,
+          "ci95": {
+            "fbeta": [
+              0.0,
+              0.0
+            ],
+            "recall": [
+              0.0,
+              0.0
+            ],
+            "fpr": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      }
+    },
+    "prevalence_rescaled": {
+      "prevalence": 0.01,
+      "selected": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "fbeta": 0.0
+      },
+      "baseline": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "fbeta": 0.0
+      }
+    },
+    "record_metrics": {
+      "attack_detected": 0.0,
+      "normal_alarmed": 0.0,
+      "median_delay_sec": null,
+      "n_attack_records": 1,
+      "n_detected": 0,
+      "n_normal_records": 1,
+      "ci95": {
+        "attack_detected": [
+          0.0,
+          0.0
+        ],
+        "normal_alarmed": [
+          0.0,
+          0.0
+        ],
+        "median_delay_sec": null
+      }
+    }
+  },
+  "recall_at_fpr0.05/topk": {
+    "infeasible": false,
+    "selected": {
+      "window_agg": "quantile",
+      "q": 1.0,
+      "p": 90.5,
+      "threshold": 52.0,
+      "k_eff": 52,
+      "fbeta": 0.17142857142857143,
+      "fpr_calib": 0.0,
+      "score": 0.09375,
+      "score_smoothed": 0.125,
+      "on_edge": {
+        "row": true,
+        "col": false
+      }
+    },
+    "raw_max": {
+      "window_agg": "quantile",
+      "q": 0.95,
+      "p": 95.5,
+      "threshold": 49.21675,
+      "k_eff": 49,
+      "fbeta": 0.2702702702702703,
+      "fpr_calib": 0.0,
+      "score": 0.15625
+    },
+    "metrics": {
+      "calib": {
+        "selected": {
+          "tp": 3,
+          "fp": 0,
+          "fn": 29,
+          "tn": 32,
+          "precision": 1.0,
+          "recall": 0.09375,
+          "fpr": 0.0,
+          "f1": 0.17142857142857143,
+          "fbeta": 0.17142857142857143
+        }
+      },
+      "holdout": {
+        "selected": {
+          "tp": 1,
+          "fp": 1,
+          "fn": 15,
+          "tn": 15,
+          "precision": 0.5,
+          "recall": 0.0625,
+          "fpr": 0.0625,
+          "f1": 0.1111111111111111,
+          "fbeta": 0.1111111111111111,
+          "roc_auc": 0.435546875,
+          "ci95": {
+            "fbeta": [
+              0.1111111111111111,
+              0.1111111111111111
+            ],
+            "recall": [
+              0.0625,
+              0.0625
+            ],
+            "fpr": [
+              0.0625,
+              0.0625
+            ]
+          }
+        }
+      }
+    },
+    "prevalence_rescaled": {
+      "prevalence": 0.01,
+      "selected": {
+        "precision": 0.01,
+        "recall": 0.0625,
+        "fbeta": 0.01724137931034483
+      }
+    },
+    "record_metrics": {
+      "attack_detected": 1.0,
+      "normal_alarmed": 1.0,
+      "median_delay_sec": 0.0012612342834472656,
+      "n_attack_records": 1,
+      "n_detected": 1,
+      "n_normal_records": 1,
+      "ci95": {
+        "attack_detected": [
+          1.0,
+          1.0
+        ],
+        "normal_alarmed": [
+          1.0,
+          1.0
+        ],
+        "median_delay_sec": [
+          0.0012612342834472656,
+          0.0012612342834472656
+        ]
+      }
+    }
+  },
+  "recall_at_fpr0.05/run_nll": {
+    "infeasible": false,
+    "selected": {
+      "m": 5,
+      "p": 90.0,
+      "tau": 4.11893892288208,
+      "rule": "R >= m",
+      "fbeta": 0.4,
+      "fpr_calib": 0.0,
+      "score": 0.25,
+      "score_smoothed": 0.234375,
+      "on_edge": {
+        "row": false,
+        "col": true
+      }
+    },
+    "raw_max": {
+      "m": 5,
+      "p": 90.0,
+      "tau": 4.11893892288208,
+      "rule": "R >= m",
+      "fbeta": 0.4,
+      "fpr_calib": 0.0,
+      "score": 0.25
+    },
+    "metrics": {
+      "calib": {
+        "selected": {
+          "tp": 8,
+          "fp": 0,
+          "fn": 24,
+          "tn": 32,
+          "precision": 1.0,
+          "recall": 0.25,
+          "fpr": 0.0,
+          "f1": 0.4,
+          "fbeta": 0.4
+        }
+      },
+      "holdout": {
+        "selected": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 16,
+          "tn": 16,
+          "precision": 0.0,
+          "recall": 0.0,
+          "fpr": 0.0,
+          "f1": 0.0,
+          "fbeta": 0.0,
+          "roc_auc": 0.595703125,
+          "ci95": {
+            "fbeta": [
+              0.0,
+              0.0
+            ],
+            "recall": [
+              0.0,
+              0.0
+            ],
+            "fpr": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      }
+    },
+    "prevalence_rescaled": {
+      "prevalence": 0.01,
+      "selected": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "fbeta": 0.0
+      }
+    },
+    "record_metrics": {
+      "attack_detected": 0.0,
+      "normal_alarmed": 0.0,
+      "median_delay_sec": null,
+      "n_attack_records": 1,
+      "n_detected": 0,
+      "n_normal_records": 1,
+      "ci95": {
+        "attack_detected": [
+          0.0,
+          0.0
+        ],
+        "normal_alarmed": [
+          0.0,
+          0.0
+        ],
+        "median_delay_sec": null
+      }
+    }
+  },
+  "recall_at_fpr0.05/run_rank": {
+    "infeasible": false,
+    "selected": {
+      "m": 2,
+      "p": 97.0,
+      "tau": 50.0,
+      "k_eff": 50,
+      "rule": "R >= m",
+      "fbeta": 0.21621621621621623,
+      "fpr_calib": 0.03125,
+      "score": 0.125,
+      "score_smoothed": 0.0625,
+      "on_edge": {
+        "row": false,
+        "col": false
+      }
+    },
+    "raw_max": {
+      "m": 2,
+      "p": 99.5,
+      "tau": 51.0,
+      "k_eff": 51,
+      "rule": "R >= m",
+      "fbeta": 0.2222222222222222,
+      "fpr_calib": 0.0,
+      "score": 0.125
+    },
+    "metrics": {
+      "calib": {
+        "selected": {
+          "tp": 4,
+          "fp": 1,
+          "fn": 28,
+          "tn": 31,
+          "precision": 0.8,
+          "recall": 0.125,
+          "fpr": 0.03125,
+          "f1": 0.21621621621621623,
+          "fbeta": 0.21621621621621623
+        }
+      },
+      "holdout": {
+        "selected": {
+          "tp": 0,
+          "fp": 4,
+          "fn": 16,
+          "tn": 12,
+          "precision": 0.0,
+          "recall": 0.0,
+          "fpr": 0.25,
+          "f1": 0.0,
+          "fbeta": 0.0,
+          "roc_auc": 0.4140625,
+          "ci95": {
+            "fbeta": [
+              0.0,
+              0.0
+            ],
+            "recall": [
+              0.0,
+              0.0
+            ],
+            "fpr": [
+              0.25,
+              0.25
+            ]
+          }
+        }
+      }
+    },
+    "prevalence_rescaled": {
+      "prevalence": 0.01,
+      "selected": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "fbeta": 0.0
+      }
+    },
+    "record_metrics": {
+      "attack_detected": 0.0,
+      "normal_alarmed": 1.0,
+      "median_delay_sec": null,
+      "n_attack_records": 1,
+      "n_detected": 0,
+      "n_normal_records": 1,
+      "ci95": {
+        "attack_detected": [
+          0.0,
+          0.0
+        ],
+        "normal_alarmed": [
+          1.0,
+          1.0
+        ],
+        "median_delay_sec": null
+      }
+    }
+  }
+}

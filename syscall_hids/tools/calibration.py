@@ -83,7 +83,16 @@ def fbeta(p, r, beta: float) -> np.ndarray:
     return _safe_div((1 + b2) * p * r, b2 * p + r)
 
 
+def mcc(tp, fp, fn, tn) -> np.ndarray:
+    """Коефіцієнт кореляції Метьюза; 0 при нульовому знаменнику (як sklearn.matthews_corrcoef)."""
+    tp, fp, fn, tn = (np.asarray(v, dtype=np.float64) for v in (tp, fp, fn, tn))
+    den = np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+    return _safe_div(tp * tn - fp * fn, den)
+
+
 def metrics_from_confusion(tp, fp, fn, tn, beta: float) -> dict[str, np.ndarray]:
+    """Метрики з матриці помилок (векторно): precision, recall (TPR), fpr, fnr, f1, fbeta, mcc,
+    youden (J = TPR − FPR), gmean (√(TPR·TNR)), balanced_accuracy."""
     precision = _safe_div(tp, np.asarray(tp) + np.asarray(fp))
     recall = _safe_div(tp, np.asarray(tp) + np.asarray(fn))
     fpr = _safe_div(fp, np.asarray(fp) + np.asarray(tn))
@@ -93,7 +102,19 @@ def metrics_from_confusion(tp, fp, fn, tn, beta: float) -> dict[str, np.ndarray]
         "fpr": fpr,
         "f1": fbeta(precision, recall, 1.0),
         "fbeta": fbeta(precision, recall, beta),
+        "fnr": 1.0 - recall,
+        "mcc": mcc(tp, fp, fn, tn),
+        "youden": recall - fpr,
+        "gmean": np.sqrt(recall * (1.0 - fpr)),
+        "balanced_accuracy": (recall + 1.0 - fpr) / 2.0,
     }
+
+
+def cost_metrics(tp, fp, fn, tn, cost_fn: float, cost_fp: float) -> dict[str, np.ndarray]:
+    """Вартість помилок c_fn·FN + c_fp·FP: повна і на одне вікно (порівнянна між частинами різного розміру)."""
+    fp, fn = np.asarray(fp, dtype=np.float64), np.asarray(fn, dtype=np.float64)
+    total = cost_fn * fn + cost_fp * fp
+    return {"cost": total, "cost_per_window": _safe_div(total, np.asarray(tp) + fp + fn + np.asarray(tn))}
 
 
 def trivial_fbeta(pi: float, beta: float) -> float:
@@ -261,16 +282,99 @@ def smooth_select(
 
 
 @dataclass(frozen=True)
-class Objective:
-    """Критерій вибору робочої точки на calib.
+class CriterionParams:
+    """Параметри критеріїв: beta (F-beta), prevalence (перерахунок precision), вартості помилок для cost."""
 
-    fbeta — максимум F-beta; fbeta_prevalence — максимум F-beta, перерахованого на --prevalence;
-    recall_at_fpr — максимум recall (за рівного recall — менший FPR). max_fpr — обмеження FPR(calib) <= max_fpr
-    (для recall_at_fpr обов'язкове).
+    beta: float = 1.0
+    prevalence: float = 0.01
+    cost_fn: float = 10.0
+    cost_fp: float = 1.0
+
+
+@dataclass(frozen=True)
+class Criterion:
+    """Критерій вибору робочої точки: значення з TP/FP/FN/TN (векторно по сітці) і напрям оптимізації.
+
+    tiebreak — другорядний ключ (мінімізується) за рівного значення критерію.
     """
 
-    kind: Literal["fbeta", "fbeta_prevalence", "recall_at_fpr"]
+    key: str
+    maximize: bool
+    value: Callable[..., np.ndarray]  # (tp, fp, fn, tn, params) -> значення
+    tiebreak: Callable[..., np.ndarray] | None = None  # (tp, fp, fn, tn) -> ключ
+    needs_limit: bool = False  # лише разом з max_fpr (recall_at_fpr)
+
+
+def _m(tp, fp, fn, tn, params: CriterionParams) -> dict[str, np.ndarray]:
+    return metrics_from_confusion(tp, fp, fn, tn, params.beta)
+
+
+def _fbeta_prevalence(tp, fp, fn, tn, params: CriterionParams) -> np.ndarray:
+    m = _m(tp, fp, fn, tn, params)
+    return fbeta(precision_at_prevalence(m["recall"], m["fpr"], params.prevalence), m["recall"], params.beta)
+
+
+def _eer_gap(tp, fp, fn, tn, params: CriterionParams) -> np.ndarray:
+    m = _m(tp, fp, fn, tn, params)
+    return np.abs(m["fpr"] - m["fnr"])
+
+
+def _error_sum(tp, fp, fn, tn) -> np.ndarray:
+    m = metrics_from_confusion(tp, fp, fn, tn, 1.0)
+    return m["fpr"] + m["fnr"]
+
+
+def _fpr(tp, fp, fn, tn) -> np.ndarray:
+    return metrics_from_confusion(tp, fp, fn, tn, 1.0)["fpr"]
+
+
+CRITERIA: dict[str, Criterion] = {
+    "fbeta": Criterion("fbeta", True, lambda tp, fp, fn, tn, p: _m(tp, fp, fn, tn, p)["fbeta"]),
+    "fbeta_prevalence": Criterion("fbeta_prevalence", True, _fbeta_prevalence),
+    "recall_at_fpr": Criterion("recall_at_fpr", True, lambda tp, fp, fn, tn, p: _m(tp, fp, fn, tn, p)["recall"],
+                               tiebreak=_fpr, needs_limit=True),
+    "youden": Criterion("youden", True, lambda tp, fp, fn, tn, p: _m(tp, fp, fn, tn, p)["youden"]),
+    "mcc": Criterion("mcc", True, lambda tp, fp, fn, tn, p: _m(tp, fp, fn, tn, p)["mcc"]),
+    "gmean": Criterion("gmean", True, lambda tp, fp, fn, tn, p: _m(tp, fp, fn, tn, p)["gmean"]),
+    "eer": Criterion("eer", False, _eer_gap, tiebreak=_error_sum),
+    "cost": Criterion("cost", False,
+                      lambda tp, fp, fn, tn, p: cost_metrics(tp, fp, fn, tn, p.cost_fn, p.cost_fp)["cost_per_window"]),
+}
+OBJECTIVE_KINDS = tuple(CRITERIA)
+
+
+def criterion_label_uk(kind: str, beta: float = 1.0, max_fpr: float | None = None) -> str:
+    """Українська назва критерію (для графіків), з обмеженням FPR, якщо воно є."""
+    labels = {
+        "fbeta": f"F{beta:g}",
+        "fbeta_prevalence": f"F{beta:g} з перерахунком на частку атак",
+        "recall_at_fpr": "Повнота при FPR ≤ α" if max_fpr is None else f"Повнота при FPR ≤ {max_fpr:g}",
+        "youden": "Індекс Юдена",
+        "mcc": "Коефіцієнт кореляції Метьюза (MCC)",
+        "gmean": "Середнє геометричне (G-mean)",
+        "eer": "Точка рівних помилок (EER)",
+        "cost": "Мінімум вартості помилок",
+    }
+    label = labels[kind]
+    return label if max_fpr is None or kind == "recall_at_fpr" else f"{label}, FPR ≤ {max_fpr:g}"
+
+
+@dataclass(frozen=True)
+class Objective:
+    """Критерій вибору робочої точки на calib (ключ CRITERIA) з необов'язковим обмеженням FPR(calib) <= max_fpr.
+
+    fbeta — максимум F-beta; fbeta_prevalence — F-beta, перерахований на --prevalence; recall_at_fpr — максимум
+    recall при FPR <= max_fpr (за рівного recall — менший FPR); youden — J = TPR − FPR (≡ balanced accuracy);
+    mcc — коефіцієнт Метьюза; gmean — √(TPR·TNR); eer — мінімум |FPR − FNR| (за рівності — менша сума);
+    cost — мінімум (c_fn·FN + c_fp·FP) / N.
+    """
+
+    kind: str
     max_fpr: float | None = None
+
+    @property
+    def criterion(self) -> Criterion:
+        return CRITERIA[self.kind]
 
     @property
     def tag(self) -> str:
@@ -279,44 +383,66 @@ class Objective:
         return self.kind + ("" if self.max_fpr is None else f"_fpr{self.max_fpr:g}")
 
 
-OBJECTIVE_KINDS = ("fbeta", "fbeta_prevalence", "recall_at_fpr")
-
-
 RECALL_AT_FPR_DEFAULT = (0.01, 0.05)
 
 
 def build_objectives(kinds: list[str], max_fprs: list[float] | None) -> list[Objective]:
-    """fbeta / fbeta_prevalence: блок без обмеження + блок на кожне max_fpr; recall_at_fpr: блок на кожне max_fpr.
+    """Кожен критерій: блок без обмеження + блок на кожне max_fpr; recall_at_fpr — лише блоки з max_fpr.
 
-    max_fprs = None (не задано): fbeta-критерії без обмеження, recall_at_fpr — RECALL_AT_FPR_DEFAULT.
+    max_fprs = None (не задано): критерії без обмеження, recall_at_fpr — RECALL_AT_FPR_DEFAULT.
     """
     out: list[Objective] = []
     for kind in dict.fromkeys(kinds):
-        limits = list(max_fprs) if max_fprs is not None else (list(RECALL_AT_FPR_DEFAULT) if kind == "recall_at_fpr" else [])
-        if kind != "recall_at_fpr":
+        needs_limit = CRITERIA[kind].needs_limit
+        limits = list(max_fprs) if max_fprs is not None else (list(RECALL_AT_FPR_DEFAULT) if needs_limit else [])
+        if not needs_limit:
             out.append(Objective(kind))
         out += [Objective(kind, float(f)) for f in limits]
     return out
 
 
 def objective_grid(
-    grid: dict[str, np.ndarray], objective: Objective, beta: float, prevalence: float
-) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None]:
-    """(значення критерію, маска допустимості або None, tiebreak або None) для сітки метрик calib."""
-    if objective.kind == "fbeta":
-        score, tiebreak = grid["fbeta"], None
-    elif objective.kind == "fbeta_prevalence":
-        score = fbeta(precision_at_prevalence(grid["recall"], grid["fpr"], prevalence), grid["recall"], beta)
-        tiebreak = None
-    else:
-        score, tiebreak = grid["recall"], grid["fpr"]
+    grid: dict[str, np.ndarray], objective: Objective, params: CriterionParams
+) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray]:
+    """Для сітки calib: (оцінка для максимізації, маска допустимості або None, tiebreak або None, значення критерію).
+
+    Оцінка для максимізації = значення критерію або −значення для критеріїв, що мінімізуються (eer, cost);
+    далі smooth_select однаковий для всіх критеріїв.
+    """
+    c = objective.criterion
+    conf = (grid["tp"], grid["fp"], grid["fn"], grid["tn"])
+    value = np.asarray(c.value(*conf, params), dtype=np.float64)
+    score = value if c.maximize else -value
+    tiebreak = None if c.tiebreak is None else c.tiebreak(*conf)
     feasible = None if objective.max_fpr is None else grid["fpr"] <= objective.max_fpr
-    return np.asarray(score, dtype=np.float64), feasible, tiebreak
+    return score, feasible, tiebreak, value
 
 
-def is_degenerate(fpr: float, value: float, trivial: float, margin: float = 0.01) -> bool:
-    """Точка не краща за «тривогу на кожне вікно»: FPR > 0.5 або F-beta не вище тривіального більш ніж на margin."""
-    return bool(fpr > 0.5 or value <= trivial + margin)
+def criterion_value(objective: Objective, tp, fp, fn, tn, params: CriterionParams) -> float:
+    """Значення критерію для однієї матриці помилок."""
+    return float(objective.criterion.value(*(np.asarray([v]) for v in (tp, fp, fn, tn)), params)[0])
+
+
+def trivial_values(objective: Objective, n_attack: int, n_normal: int, params: CriterionParams) -> dict[str, float]:
+    """Значення критерію в тривіальних детекторів: «тривога на кожне вікно» і «жодної тривоги»."""
+    return {
+        "all_alarm": criterion_value(objective, n_attack, n_normal, 0, 0, params),
+        "no_alarm": criterion_value(objective, 0, 0, n_attack, n_normal, params),
+    }
+
+
+def is_degenerate(objective: Objective, value: float, fpr: float, trivial: dict[str, float], margin: float = 0.01) -> bool:
+    """Точка не краща за тривіальні детектори: FPR(calib) > 0.5 або значення критерію не краще за найкращий
+    допустимий тривіальний детектор більш ніж на margin (в одиницях критерію, з урахуванням напряму).
+
+    Допустимий — той, що проходить обмеження max_fpr: «тривога на все» (FPR = 1) при обмеженні випадає.
+    Для youden, gmean і mcc обидва тривіальні значення дорівнюють 0, тому на збалансованому тесті ці критерії
+    у «тривогу на все» не вироджуються (на відміну від F-beta, у якого «тривога на все» дає (1+β²)π/(β²π+1)).
+    """
+    sign = 1.0 if objective.criterion.maximize else -1.0
+    candidates = [trivial["no_alarm"]] + ([trivial["all_alarm"]] if objective.max_fpr is None else [])
+    best = max(sign * v for v in candidates)
+    return bool(fpr > 0.5 or sign * value <= best + margin)
 
 
 def default_p_grid() -> np.ndarray:
@@ -411,8 +537,8 @@ def ci95(values: np.ndarray) -> list[float]:
 
 
 def ci95_summary(boot: dict[str, np.ndarray]) -> dict[str, list[float]]:
-    """95% бутстреп-інтервали F-beta, recall і FPR."""
-    return {key: ci95(boot[key]) for key in ("fbeta", "recall", "fpr")}
+    """95% бутстреп-інтервали F-beta, F1, MCC, індексу Юдена, recall і FPR."""
+    return {key: ci95(boot[key]) for key in ("fbeta", "f1", "mcc", "youden", "recall", "fpr")}
 
 
 def paired_delta_ci(boot_a: np.ndarray, boot_b: np.ndarray) -> dict:

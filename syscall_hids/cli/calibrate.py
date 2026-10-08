@@ -5,14 +5,16 @@
 поділ, бутстреп-ресемпли й методика вибору точки спільні.
 
 Критерій вибору робочої точки (--objective, можна кілька): fbeta (за замовчуванням F1), fbeta_prevalence
-(F-beta, перерахований на --prevalence), recall_at_fpr (максимум recall при FPR(calib) <= --max_fpr).
---max_fpr разом із fbeta-критеріями — обмеження: кожне значення дає окремий блок результатів.
-Захист від виродження: точку, не кращу за «тривогу на кожне вікно», позначено degenerate.
+(F-beta, перерахований на --prevalence), recall_at_fpr (максимум recall при FPR(calib) <= --max_fpr), youden
+(J = TPR − FPR), mcc, gmean (√(TPR·TNR)), eer (мінімум |FPR − FNR|), cost (мінімум (c_fn·FN + c_fp·FP)/N).
+--max_fpr — обмеження для будь-якого критерію: кожне значення дає окремий блок результатів.
+Захист від виродження: точку, не кращу за тривіальні детектори («тривога на все», «жодної тривоги»),
+позначено degenerate. Для будь-якого критерію на holdout рахується однаковий повний набір метрик.
 Порівняння без вибору точки: pAUC при FPR <= 5% на holdout.
 
 Usage:
     hids-calibrate --service PHP_CWE-434
-    hids-calibrate --config configs/php_cwe_434.yaml --service PHP_CWE-434 --objective fbeta --objective recall_at_fpr --max_fpr 0.01 0.05
+    hids-calibrate --config configs/php_cwe_434.yaml --service PHP_CWE-434 --objective fbeta youden mcc gmean eer cost recall_at_fpr --max_fpr 0.05
     hids-calibrate --service PHP_CWE-434 --methods nll run_nll --beta 2
     hids-calibrate --service FIXT --checkpoint tests/golden/FIXT.pt --dataset_root tests/golden/data --val_step 32
 """
@@ -32,6 +34,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import ListedColormap
+from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 import torch
 from sklearn.metrics import precision_recall_curve, roc_auc_score, roc_curve
@@ -50,6 +53,7 @@ from syscall_hids.tools.calibration import (
     METHOD_NAMES,
     OBJECTIVE_KINDS,
     PAUC_MAX_FPR,
+    CriterionParams,
     Method,
     Objective,
     aggregate,
@@ -62,6 +66,9 @@ from syscall_hids.tools.calibration import (
     ci95,
     ci95_summary,
     confusion_at_threshold,
+    cost_metrics,
+    criterion_label_uk,
+    criterion_value,
     curve_scores,
     default_p_grid,
     edge_flags,
@@ -79,6 +86,7 @@ from syscall_hids.tools.calibration import (
     split_recordings,
     step_ranks,
     trivial_fbeta,
+    trivial_values,
     window_starts,
 )
 from syscall_hids.tools.checkpoint import checkpoint_features, load_model
@@ -90,12 +98,18 @@ SANITY_REL_TOL = 1e-4  # відносна розбіжність порогу, �
 SANITY_REL_FAIL = 0.01  # вище — зупинка (якщо не --ignore_sanity)
 CACHE_VERSION = 3  # 2: ранги на кроках (val_rank, test_rank); 3: час кінця вікна test_t_end
 MIN_BOOTSTRAP_RECORDINGS = 5  # менше записів класу в holdout — інтервали бутстрепу ненадійні
-DEGENERATE_MARGIN = 0.01  # F-beta має бути вище тривіального рівня більш ніж на це значення
 REFERENCE_METHOD = "nll"
 BASELINE_LABEL = "Базова лінія (параметри з чекпоінта)"
 TRIVIAL_LABEL = "Тривога на кожне вікно"
-DEGENERATE_WARNING = "degenerate: не краще за тривогу на все вікна"
+DEGENERATE_WARNING = "degenerate: не краще за тривіальні детектори (тривога на все вікна / жодної тривоги)"
 METHOD_COLORS = {"nll": "#2563eb", "topk": "#dc2626", "run_nll": "#16a34a", "run_rank": "#9333ea"}
+METHOD_MARKERS = {"nll": "o", "topk": "s", "run_nll": "^", "run_rank": "D"}
+CRITERION_STYLE = {  # маркер і колір критерію на operating_points_roc.png (однакові для всіх методів)
+    "fbeta": ("o", "#1f77b4"), "fbeta_prevalence": ("P", "#8c564b"), "youden": ("s", "#ff7f0e"),
+    "mcc": ("^", "#2ca02c"), "gmean": ("D", "#d62728"), "eer": ("X", "#9467bd"), "cost": ("*", "#e377c2"),
+    "recall_at_fpr": ("v", "#17becf"),
+}
+ROC_MIN_FPR = 1e-3
 
 
 def build_calibrate_arg_parser(description: str | None = None):
@@ -115,11 +129,15 @@ def build_calibrate_arg_parser(description: str | None = None):
     group = parser.add_argument_group("Calibration")
     group.add_argument("--methods", nargs="+", choices=METHOD_NAMES, default=list(METHOD_NAMES),
                        help="Scoring methods to calibrate and compare")
-    group.add_argument("--objective", action="append", choices=OBJECTIVE_KINDS, default=None,
-                       help="Operating point criterion; repeat for several (default: fbeta)")
+    group.add_argument("--objective", action="extend", nargs="+", choices=OBJECTIVE_KINDS, default=None,
+                       help="Operating point criteria, several allowed (default: fbeta); the first one is the main")
     group.add_argument("--max_fpr", type=float, nargs="+", default=None,
-                       help="FPR(calib) limits: a constraint for fbeta criteria (one block each, plus the "
+                       help="FPR(calib) limits: a constraint for any criterion (one block each, plus the "
                             "unconstrained one) and the limit of recall_at_fpr (default for it: 0.01 0.05)")
+    group.add_argument("--cost_fn", type=float, default=10.0, help="Cost of a missed attack window (criterion cost)")
+    group.add_argument("--cost_fp", type=float, default=1.0, help="Cost of a false alarm window (criterion cost)")
+    group.add_argument("--degenerate_margin", type=float, default=0.01,
+                       help="A point must beat the best trivial detector by more than this (criterion units)")
     group.add_argument("--calib_fraction", type=float, default=0.5, help="Share of test recordings in the calib part")
     # окреме ім'я замість --seed: seed зі збережених конфігів навчання не впливає на поділ
     group.add_argument("--split_seed", type=int, default=0, help="Seed for the calib/holdout split and the bootstrap")
@@ -163,6 +181,10 @@ def _check_calibrate_args(parser, args) -> None:
         parser.error("--beta must be > 0")
     if args.bootstrap < 0:
         parser.error("--bootstrap must be >= 0")
+    if args.cost_fn <= 0 or args.cost_fp <= 0:
+        parser.error("--cost_fn and --cost_fp must be > 0")
+    if args.degenerate_margin < 0:
+        parser.error("--degenerate_margin must be >= 0")
     if args.write_checkpoint and REFERENCE_METHOD not in args.methods:
         parser.error("--write_checkpoint requires nll in --methods (inference supports only nll)")
 
@@ -310,11 +332,18 @@ def load_or_compute_cache(cache_path: str, key: dict, compute) -> tuple[dict[str
     return data, False
 
 
-def point_metrics(scores: np.ndarray, is_attack: np.ndarray, threshold: float, beta: float) -> dict:
+def point_metrics(
+    scores: np.ndarray, is_attack: np.ndarray, threshold: float, beta: float, params: CriterionParams | None = None
+) -> dict:
+    """Повний набір метрик точки: TP/FP/FN/TN, precision, recall, fpr, fnr, f1, fbeta, mcc, youden, gmean,
+    balanced_accuracy і (з params) вартість помилок."""
     conf = confusion_at_threshold(scores, is_attack, [threshold])
     metrics = metrics_from_confusion(conf["tp"], conf["fp"], conf["fn"], conf["tn"], beta)
     out = {k: int(v[0]) for k, v in conf.items()}
     out.update({k: float(v[0]) for k, v in metrics.items()})
+    if params is not None:
+        costs = cost_metrics(conf["tp"], conf["fp"], conf["fn"], conf["tn"], params.cost_fn, params.cost_fp)
+        out.update({k: float(v[0]) for k, v in costs.items()})
     return out
 
 
@@ -340,26 +369,16 @@ def sanity_check(val_nll: np.ndarray, checkpoint: dict, baseline_p: float, ignor
     }
 
 
-def _objective_label_uk(objective: Objective, beta: float, prevalence: float) -> str:
-    """Підпис значення критерію (кольорова шкала теплової карти)."""
-    if objective.kind == "fbeta":
-        return f"{_fname(beta)} на калібрувальній частині"
-    if objective.kind == "fbeta_prevalence":
-        return f"{_fname(beta)} при частці атак {prevalence:g} на калібрувальній частині"
-    return "Повнота (recall) на калібрувальній частині"
-
-
 def _objective_title_uk(objective: Objective, beta: float) -> str:
-    base = {"fbeta": f"максимум {_fname(beta)}", "fbeta_prevalence": f"максимум {_fname(beta)} при реальній частці атак",
-            "recall_at_fpr": "максимум повноти"}[objective.kind]
-    return base + ("" if objective.max_fpr is None else f", FPR ≤ {objective.max_fpr:g}")
+    return criterion_label_uk(objective.kind, beta, objective.max_fpr)
 
 
 def _heatmap_name(objective: Objective, beta: float) -> str:
     if objective.kind == "recall_at_fpr":
         return "recall_heatmap.png"
-    suffix = "_prevalence" if objective.kind == "fbeta_prevalence" else ""
-    return f"f{beta:g}{suffix}_heatmap.png"
+    if objective.kind in ("fbeta", "fbeta_prevalence"):
+        return f"f{beta:g}{'_prevalence' if objective.kind == 'fbeta_prevalence' else ''}_heatmap.png"
+    return f"{objective.kind}_heatmap.png"
 
 
 def _log_edges(share: np.ndarray) -> np.ndarray:
@@ -381,11 +400,13 @@ def plot_heatmap(
     edges_x = _log_edges(share)
     edges_y = np.arange(len(rows) + 1) - 0.5
     fig, ax = plt.subplots(figsize=(11, 5 if len(rows) <= 12 else 8))
-    mesh = ax.pcolormesh(edges_x, edges_y, vals, cmap="viridis", shading="flat")
+    # критерії, що мінімізуються (eer, cost): обернена шкала, щоб краще завжди було світлішим
+    cmap = "viridis" if objective.criterion.maximize else "viridis_r"
+    mesh = ax.pcolormesh(edges_x, edges_y, vals, cmap=cmap, shading="flat")
     ax.set_xscale("log")
     ax.set_xlim(edges_x[0], edges_x[-1])  # спадна вісь: поріг росте вправо
     cbar = fig.colorbar(mesh, ax=ax)
-    cbar.set_label(_objective_label_uk(objective, beta, prevalence))
+    cbar.set_label(f"{criterion_label_uk(objective.kind, beta)} на калібрувальній частині")
     extra: list = []
     if objective.max_fpr is not None:
         # недопустимі клітинки затінено (контур інтерполював би між сходинками й брехав)
@@ -405,7 +426,7 @@ def plot_heatmap(
     unit = "вікон" if method.family == "quantile" else "кроків"
     ax.set_xlabel(f"Частка {unit} вище порогу на валідації, %")
     ax.set_ylabel(method.row_axis)
-    title = method.title.format(f=_fname(beta) if objective.kind != "recall_at_fpr" else "повноти")
+    title = method.title.format(f="критерію")
     ax.set_title(f"{title}\nКритерій: {_objective_title_uk(objective, beta)}")
     # легенда під графіком, щоб не закривати обрану точку
     handles = ax.get_legend_handles_labels()[0] + extra
@@ -587,39 +608,6 @@ def log_nll_baseline_table(result: dict, beta: float) -> None:
         logging.info(f"{name:<16}{b:>20}{s:>20}")
 
 
-def log_block_table(block: dict, beta: float, prevalence: float) -> None:
-    """Таблиця блоку критерію: обрана точка кожного методу на calib і holdout, тривіальний рівень, записи."""
-    f = _fname(beta)
-    logging.info(f"\n[{block['tag']}] holdout, attack window share pi = {block['attack_fraction_holdout']:.4f}; "
-                 f"* = degenerate (not better than alarm on every window); {f}@pi rescaled to prevalence={prevalence:g}")
-    logging.info(f"{'method':<10}{'params':<20}{'rec_cal':>8}{'fpr_cal':>8}{'recall':>8}{'FPR':>8}{'prec':>8}"
-                 f"{f:>9}{f'{f} 95% CI':>18}{f'{f}@pi':>8}{'trivial':>8}{'att_rec':>8}{'nrm_rec':>8}{'delay_s':>9}"
-                 f"{'d'+f+' vs nll':>13}{'sig':>5}")
-    t = block["trivial"]
-    logging.info(f"{'trivial':<10}{'alarm on all':<20}{1.0:>8.4f}{1.0:>8.4f}{1.0:>8.4f}{1.0:>8.4f}"
-                 f"{t['holdout']['precision']:>8.4f}{t['holdout']['fbeta']:>9.4f}{'':>18}{t['holdout']['fbeta_prevalence']:>8.4f}"
-                 f"{t['holdout']['fbeta']:>8.4f}{1.0:>8.4f}{1.0:>8.4f}{'':>9}{'':>13}{'':>5}")
-    b = block["baseline"]["holdout"]
-    logging.info(f"{'baseline':<10}{block['baseline']['params']:<20}{'':>8}{'':>8}{b['recall']:>8.4f}{b['fpr']:>8.4f}"
-                 f"{b['precision']:>8.4f}{b['fbeta']:>9.4f}{_fmt_ci(b.get('ci95'), 'fbeta'):>18}"
-                 f"{block['baseline']['prevalence_rescaled']['fbeta']:>8.4f}{t['holdout']['fbeta']:>8.4f}")
-    for e in block["methods"]:
-        if e["infeasible"]:
-            logging.info(f"{e['method']:<10}{'infeasible':<20}")
-            continue
-        h, c, r, d = e["holdout"], e["calib"], e["record_metrics"], e["delta_fbeta_vs_nll"]
-        value = ("*" if e["degenerate"] else "") + f"{h['fbeta']:.4f}"
-        delay = "" if r["median_delay_sec"] is None else f"{r['median_delay_sec']:.2f}"
-        dv = "" if d is None else f"{d['value']:+.4f}"
-        sig = "" if d is None or d["ci95"] is None else ("yes" if d["significant"] else "no")
-        logging.info(
-            f"{e['method']:<10}{e['params_text']:<20}{c['recall']:>8.4f}{c['fpr']:>8.4f}{h['recall']:>8.4f}{h['fpr']:>8.4f}"
-            f"{h['precision']:>8.4f}{value:>9}"
-            f"{_fmt_ci(h.get('ci95'), 'fbeta'):>18}{e['prevalence_rescaled']['fbeta']:>8.4f}{e['trivial_fbeta']['holdout']:>8.4f}"
-            f"{r['attack_detected']:>8.3f}{r['normal_alarmed']:>8.3f}{delay:>9}{dv:>13}{sig:>5}"
-        )
-
-
 def log_threshold_free_table(threshold_free: list[dict]) -> None:
     logging.info(f"\nThreshold-free comparison on holdout (curve parameter chosen on calib by pAUC@{PAUC_MAX_FPR:g}, "
                  f"McClish standardization):")
@@ -635,18 +623,19 @@ def log_threshold_free_table(threshold_free: list[dict]) -> None:
 
 
 def write_grid_csv(
-    path: str, method: Method, grid: dict, rows: list, p_grid: np.ndarray, score: np.ndarray,
+    path: str, method: Method, grid: dict, rows: list, p_grid: np.ndarray, score: np.ndarray, value: np.ndarray,
     smoothed: np.ndarray | None, feasible: np.ndarray | None, prevalence: float, beta: float,
 ) -> None:
-    """Сітка calib: параметри, поріг (θ або τ; k_eff для рангів), метрики, F-beta@prevalence, критерій і його згладження."""
-    metric_cols = ["tp", "fp", "fn", "tn", "precision", "recall", "fpr", "f1", "fbeta"]
+    """Сітка calib: параметри, поріг (θ або τ; k_eff для рангів), метрики, F-beta@prevalence, значення критерію,
+    оцінка для максимізації (score = значення або −значення) та її згладження."""
+    metric_cols = ["tp", "fp", "fn", "tn", "precision", "recall", "fpr", "f1", "fbeta", "mcc", "youden", "gmean"]
     with_k = method.step_key == "rank"
     fbeta_prev = fbeta(precision_at_prevalence(grid["recall"], grid["fpr"], prevalence), grid["recall"], beta)
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         head = ["window_agg", "q", "p", "threshold"] if method.family == "quantile" else ["m", "p", "tau"]
         writer.writerow([*head, *(["k_eff"] if with_k else []), *metric_cols, "fbeta_prevalence",
-                         "score", "score_smoothed", "feasible"])
+                         "criterion_value", "score", "score_smoothed", "feasible"])
         for i, row in enumerate(rows):
             if method.family == "quantile":
                 label = _row_label(row)
@@ -657,14 +646,17 @@ def write_grid_csv(
                 thr = grid["threshold"][i, j].item()
                 writer.writerow([
                     *key, f"{p:g}", thr, *([math.floor(thr)] if with_k else []),
-                    *[grid[c][i, j].item() for c in metric_cols], fbeta_prev[i, j].item(), score[i, j].item(),
+                    *[grid[c][i, j].item() for c in metric_cols], fbeta_prev[i, j].item(), value[i, j].item(),
+                    score[i, j].item(),
                     "" if smoothed is None else smoothed[i, j].item(),
                     True if feasible is None else bool(feasible[i, j]),
                 ])
 
 
-def _point(method: Method, rows: list, p_grid: np.ndarray, grid: dict, score: np.ndarray, ij: tuple[int, int]) -> dict:
-    """Опис точки сітки: параметри, поріг (θ або τ), k_eff для рангів, F-beta і значення критерію на calib."""
+def _point(
+    method: Method, rows: list, p_grid: np.ndarray, grid: dict, score: np.ndarray, value: np.ndarray, ij: tuple[int, int]
+) -> dict:
+    """Опис точки сітки: параметри, поріг (θ або τ), k_eff для рангів, F-beta, значення критерію й оцінка на calib."""
     i, j = ij
     thr = float(grid["threshold"][i, j])
     out = {**_param_label(method, rows[i]), "p": float(p_grid[j])}
@@ -675,6 +667,7 @@ def _point(method: Method, rows: list, p_grid: np.ndarray, grid: dict, score: np
         out["rule"] = "R >= m"
     out["fbeta"] = float(grid["fbeta"][i, j])
     out["fpr_calib"] = float(grid["fpr"][i, j])
+    out["criterion_value"] = float(value[i, j])
     out["score"] = float(score[i, j])
     return out
 
@@ -682,7 +675,7 @@ def _point(method: Method, rows: list, p_grid: np.ndarray, grid: dict, score: np
 def evaluate_holdout(scores: np.ndarray, threshold: float, ctx: dict, beta: float) -> tuple[dict, dict | None]:
     """Метрики holdout (+ ROC-AUC) і, якщо бутстреп увімкнено, метрики на спільних ресемплах та 95% ДІ."""
     mask, is_attack = ctx["holdout_mask"], ctx["test_is_attack"]
-    m = point_metrics(scores[mask], is_attack[mask], threshold, beta)
+    m = point_metrics(scores[mask], is_attack[mask], threshold, beta, ctx["params"])
     m["roc_auc"] = float(roc_auc_score(is_attack[mask], scores[mask]))
     boot = None
     if ctx["sample"] is not None:
@@ -716,7 +709,8 @@ def calibrate_block(
     is_ref = method.name == REFERENCE_METHOD
     name = f"{method.name}/{objective.tag}"
 
-    score, feasible, tiebreak = objective_grid(grid, objective, beta, prevalence)
+    params = ctx["params"]
+    score, feasible, tiebreak, value = objective_grid(grid, objective, params)
     mean_row = rows.index("mean") if "mean" in rows else None
     selection = smooth_select(score, mean_row, feasible, tiebreak)
     method_dir = os.path.join(ctx["out_dir"], objective.tag, method.name)
@@ -725,6 +719,7 @@ def calibrate_block(
     pi_calib, pi_holdout = ctx["pi_calib"], ctx["pi_holdout"]
     trivial = {"calib": trivial_fbeta(pi_calib, beta), "holdout": trivial_fbeta(pi_holdout, beta),
                "prevalence": trivial_fbeta(prevalence, beta)}
+    trivial_crit = {part: trivial_values(objective, *ctx["class_counts"][part], params) for part in ("calib", "holdout")}
     result = {
         "method": method.name,
         "label": method.label,
@@ -734,21 +729,26 @@ def calibrate_block(
         "objective": {"kind": objective.kind, "max_fpr": objective.max_fpr, "tag": objective.tag},
         "beta": beta,
         **common,
+        "criterion": {"key": objective.kind, "label": criterion_label_uk(objective.kind, beta, objective.max_fpr),
+                      "maximize": objective.criterion.maximize, "cost_fn": params.cost_fn, "cost_fp": params.cost_fp},
         "trivial_fbeta": trivial,
+        "trivial_criterion": trivial_crit,
     }
     summary = {"method": method.name, "label": method.label, "row_param": method.row_param, "col_param": method.col_param,
-               "infeasible": selection is None, "trivial_fbeta": trivial}
+               "infeasible": selection is None, "trivial_fbeta": trivial, "trivial_criterion": trivial_crit}
 
     if selection is None:
         logging.warning(f"WARNING: [{name}] infeasible: no grid point with FPR(calib) <= {objective.max_fpr:g}")
         result.update({"infeasible": True, "selected": None, "raw_max": None, "degenerate": None, "metrics": None})
-        plot_heatmap(method, objective, score, rows, p_grid, None, grid["fpr"], beta, prevalence,
+        plot_heatmap(method, objective, value, rows, p_grid, None, grid["fpr"], beta, prevalence,
                      os.path.join(method_dir, _heatmap_name(objective, beta)))
-        write_grid_csv(os.path.join(method_dir, "grid.csv"), method, grid, rows, p_grid, score, None, feasible, prevalence, beta)
+        write_grid_csv(os.path.join(method_dir, "grid.csv"), method, grid, rows, p_grid, score, value, None, feasible,
+                       prevalence, beta)
         with open(os.path.join(method_dir, "calibration.json"), "w", encoding="utf-8") as fh:
             json.dump(result, fh, indent=2, ensure_ascii=False)
         summary.update({"degenerate": None, "selected": None, "params_text": "infeasible", "holdout": None, "calib": None,
-                        "record_metrics": None, "prevalence_rescaled": None, "_boot": None, "_scores": None, "_result": result})
+                        "criterion_value": None, "record_metrics": None, "prevalence_rescaled": None,
+                        "_boot": None, "_scores": None, "_result": result})
         return summary
 
     (si, sj), (ri, rj), smoothed = selection
@@ -766,7 +766,7 @@ def calibrate_block(
     metrics: dict = {"calib": {}, "holdout": {}}
     boots: dict = {}
     for n, sc, thr in named:
-        metrics["calib"][n] = point_metrics(sc[calib_mask], test_is_attack[calib_mask], thr, beta)
+        metrics["calib"][n] = point_metrics(sc[calib_mask], test_is_attack[calib_mask], thr, beta, params)
     for n, sc, thr in named:
         metrics["holdout"][n], boots[n] = evaluate_holdout(sc, thr, ctx, beta)
     rescaled = {"prevalence": prevalence}
@@ -775,19 +775,16 @@ def calibrate_block(
     records = evaluate_records(scores, sel_threshold, ctx)
 
     cal, hold = metrics["calib"]["selected"], metrics["holdout"]["selected"]
-    if objective.kind == "fbeta_prevalence":
-        value_calib, level_calib = _rescaled(cal, prevalence, beta)["fbeta"], trivial["prevalence"]
-        value_hold, level_hold = rescaled["selected"]["fbeta"], trivial["prevalence"]
-    else:
-        value_calib, level_calib = cal["fbeta"], trivial["calib"]
-        value_hold, level_hold = hold["fbeta"], trivial["holdout"]
-    degenerate = is_degenerate(cal["fpr"], value_calib, level_calib, DEGENERATE_MARGIN)
-    degenerate_holdout = is_degenerate(hold["fpr"], value_hold, level_hold, DEGENERATE_MARGIN)
+    value_calib = criterion_value(objective, cal["tp"], cal["fp"], cal["fn"], cal["tn"], params)
+    value_hold = criterion_value(objective, hold["tp"], hold["fp"], hold["fn"], hold["tn"], params)
+    margin = args.degenerate_margin
+    degenerate = is_degenerate(objective, value_calib, cal["fpr"], trivial_crit["calib"], margin)
+    degenerate_holdout = is_degenerate(objective, value_hold, hold["fpr"], trivial_crit["holdout"], margin)
     if degenerate:
         logging.warning(f"WARNING: [{name}] {DEGENERATE_WARNING} (FPR calib={cal['fpr']:.3f}, "
-                        f"{_fname(beta)}={value_calib:.4f}, trivial={level_calib:.4f})")
+                        f"value={value_calib:.4f}, trivial={trivial_crit['calib']})")
 
-    selected = {**_point(method, rows, p_grid, grid, score, (si, sj)), "score_smoothed": float(smoothed[si, sj]),
+    selected = {**_point(method, rows, p_grid, grid, score, value, (si, sj)), "score_smoothed": float(smoothed[si, sj]),
                 "on_edge": on_edge}
     grid_desc = {"p": [float(p) for p in p_grid], "beta": beta}
     if method.family == "quantile":
@@ -802,7 +799,8 @@ def calibrate_block(
         "degenerate_holdout": degenerate_holdout,
         "grid": grid_desc,
         "selected": selected,
-        "raw_max": _point(method, rows, p_grid, grid, score, (ri, rj)),
+        "raw_max": _point(method, rows, p_grid, grid, score, value, (ri, rj)),
+        "criterion_value": {"calib": value_calib, "holdout": value_hold},
         "baseline": ctx["baseline_desc"] if is_ref else None,
         "metrics": metrics,
         "record_metrics": records,
@@ -814,26 +812,28 @@ def calibrate_block(
 
     with open(os.path.join(method_dir, "calibration.json"), "w", encoding="utf-8") as fh:
         json.dump(result, fh, indent=2, ensure_ascii=False)
-    write_grid_csv(os.path.join(method_dir, "grid.csv"), method, grid, rows, p_grid, score, smoothed, feasible, prevalence, beta)
-    plot_heatmap(method, objective, score, rows, p_grid, selection, grid["fpr"], beta, prevalence,
+    write_grid_csv(os.path.join(method_dir, "grid.csv"), method, grid, rows, p_grid, score, value, smoothed, feasible,
+                   prevalence, beta)
+    plot_heatmap(method, objective, value, rows, p_grid, selection, grid["fpr"], beta, prevalence,
                  os.path.join(method_dir, _heatmap_name(objective, beta)))
     plot_pr_curve(method, test_is_attack[holdout_mask], scores[holdout_mask], hold,
                   metrics["holdout"].get("baseline"), os.path.join(method_dir, "pr_curve_holdout.png"))
-    if is_ref:
+    if is_ref and objective.tag == ctx["main_tag"]:
         log_nll_baseline_table(result, beta)
     raw = result["raw_max"]
     logging.info(
         f"[{name}] selected: {_param_text(method, sel_row)} p={sel_p:g} "
         f"{'threshold' if method.family == 'quantile' else 'tau'}={grid['threshold'][si, sj]:.4f}"
         f"{' k_eff=' + str(selected['k_eff']) if 'k_eff' in selected else ''} FPR(calib)={cal['fpr']:.4f}; "
-        f"raw max: {_param_text(method, rows[ri])} p={raw['p']:g} score={raw['score']:.4f}"
+        f"raw max: {_param_text(method, rows[ri])} p={raw['p']:g} value={raw['criterion_value']:.4f}"
     )
 
     summary.update({
         "degenerate": degenerate,
         "degenerate_holdout": degenerate_holdout,
         "params_text": f"{_param_text(method, sel_row)} p={sel_p:g}",
-        "selected": {k: v for k, v in selected.items() if k not in ("score", "score_smoothed", "fbeta")},
+        "selected": {k: v for k, v in selected.items() if k not in ("score", "score_smoothed", "fbeta", "criterion_value")},
+        "criterion_value": {"calib": value_calib, "holdout": value_hold},
         "calib": {"recall": cal["recall"], "fpr": cal["fpr"], "fbeta": cal["fbeta"], "score": selected["score"],
                   "score_smoothed": selected["score_smoothed"]},
         "holdout": hold,
@@ -899,6 +899,8 @@ def build_block(objective: Objective, summaries: list[dict], baseline: dict, tri
         "beta": args.beta,
         "attack_fraction_holdout": ctx["pi_holdout"],
         "trivial": trivial,
+        "trivial_criterion": {part: trivial_values(objective, *ctx["class_counts"][part], ctx["params"])
+                              for part in ("calib", "holdout")},
         "baseline": baseline,
         "methods": [{k: v for k, v in s.items() if not k.startswith("_")} for s in summaries],
     }
@@ -913,7 +915,10 @@ def build_block(objective: Objective, summaries: list[dict], baseline: dict, tri
         "bootstrap": {"n": args.bootstrap, "seed": args.split_seed, "unit": "recording", "stratified": True,
                       "shared_resamples": True} if args.bootstrap else None,
         "reference_method": REFERENCE_METHOD if ref is not None else None,
-        "degenerate_rule": f"FPR(calib) > 0.5 or F-beta(calib) <= trivial + {DEGENERATE_MARGIN}",
+        "criterion": {"key": objective.kind, "label": criterion_label_uk(objective.kind, args.beta, objective.max_fpr),
+                      "maximize": objective.criterion.maximize, "cost_fn": args.cost_fn, "cost_fp": args.cost_fp},
+        "degenerate_rule": (f"FPR(calib) > 0.5 or criterion(calib) not better than the best feasible trivial detector "
+                            f"(all alarm / no alarm) by more than {args.degenerate_margin}"),
         **block,
         "threshold_free": [{k: v for k, v in e.items() if not k.startswith("_")} for e in threshold_free],
     }
@@ -926,14 +931,17 @@ def build_block(objective: Objective, summaries: list[dict], baseline: dict, tri
                        os.path.join(out, "pr_comparison.png"))
     plot_roc_comparison(threshold_free, {e["method"]: e["_scores"] for e in threshold_free}, is_attack,
                         os.path.join(out, "roc_comparison.png"))
-    log_block_table(block, args.beta, args.prevalence)
     return block
 
 
+METRIC_COLUMNS = ["tp", "fp", "fn", "tn", "precision", "recall", "fpr", "fnr", "f1", "fbeta", "mcc", "youden", "gmean",
+                  "balanced_accuracy", "cost", "cost_per_window"]
+CI_KEYS = ["f1", "fbeta", "mcc", "youden", "recall", "fpr"]
 CSV_COLUMNS = [
-    "objective", "beta", "max_fpr", "method", "label", "params", "infeasible", "degenerate", "degenerate_holdout",
-    "recall_calib", "fpr_calib", "fbeta_calib", "recall", "recall_lo", "recall_hi", "fpr", "fpr_lo", "fpr_hi",
-    "precision", "fbeta", "fbeta_lo", "fbeta_hi", "fbeta_prevalence", "trivial_fbeta",
+    "service", "objective", "beta", "max_fpr", "method", "label", "params", "threshold", "criterion_value",
+    "infeasible", "degenerate", "degenerate_holdout", "recall_calib", "fpr_calib",
+    *METRIC_COLUMNS, "fbeta_prevalence", "trivial_fbeta",
+    *[f"{k}_{b}" for k in CI_KEYS for b in ("lo", "hi")],
     "pauc_0.05", "pauc_lo", "pauc_hi", "roc_auc",
     "attack_detected", "attack_detected_lo", "attack_detected_hi", "normal_alarmed", "normal_alarmed_lo",
     "normal_alarmed_hi", "median_delay_sec", "median_delay_lo", "median_delay_hi",
@@ -946,29 +954,50 @@ def _ci_pair(ci: dict | None, key: str) -> list:
     return ["", ""] if ci is None or ci.get(key) is None else list(ci[key])
 
 
-def write_comparison_csv(path: str, blocks: list[dict], threshold_free: list[dict]) -> None:
-    """Усі блоки критеріїв: рядок на (блок, метод) + baseline і trivial; pAUC — з порівняння без вибору точки."""
+def _ci_cells(ci: dict | None) -> dict:
+    out = {}
+    for key in CI_KEYS:
+        out[f"{key}_lo"], out[f"{key}_hi"] = _ci_pair(ci, key)
+    return out
+
+
+def _trivial_rows(head: dict, block: dict, params: CriterionParams) -> list[dict]:
+    """Рядки тривіальних детекторів на holdout: «тривога на кожне вікно» і «жодної тривоги»."""
+    bh = block["baseline"]["holdout"]
+    n_attack, n_normal = bh["tp"] + bh["fn"], bh["fp"] + bh["tn"]
+    rows = []
+    for name, label, conf in (("all_alarm", TRIVIAL_LABEL, (n_attack, n_normal, 0, 0)),
+                              ("no_alarm", "Жодної тривоги", (0, 0, n_attack, n_normal))):
+        m = {k: float(v) for k, v in metrics_from_confusion(*conf, block["beta"]).items()}
+        m.update({k: float(v) for k, v in cost_metrics(*conf, params.cost_fn, params.cost_fp).items()})
+        rows.append({**head, "method": name, "label": label, "params": name.replace("_", " "),
+                     "criterion_value": block["trivial_criterion"]["holdout"][name],
+                     **dict(zip(("tp", "fp", "fn", "tn"), conf)), **{k: m[k] for k in METRIC_COLUMNS[4:]},
+                     "trivial_fbeta": block["trivial"]["holdout"]["fbeta"],
+                     "attack_detected": 1.0 if name == "all_alarm" else 0.0,
+                     "normal_alarmed": 1.0 if name == "all_alarm" else 0.0})
+    return rows
+
+
+def write_comparison_csv(path: str, blocks: list[dict], threshold_free: list[dict], service: str,
+                         params: CriterionParams) -> None:
+    """Рядок на (сервіс, метод, критерій, max_fpr) з однаковим повним набором метрик holdout;
+    плюс baseline і тривіальні детектори на кожен блок; pAUC — з порівняння без вибору точки."""
     tf = {e["method"]: e for e in threshold_free}
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=CSV_COLUMNS)
         writer.writeheader()
         for block in blocks:
-            head = {"objective": block["objective"], "beta": block["beta"],
+            head = {"service": service, "objective": block["objective"], "beta": block["beta"],
                     "max_fpr": "" if block["max_fpr"] is None else block["max_fpr"]}
-            t = block["trivial"]
-            writer.writerow({**head, "method": "trivial", "label": TRIVIAL_LABEL, "params": "alarm on all",
-                             "recall": 1.0, "fpr": 1.0, "precision": t["holdout"]["precision"],
-                             "fbeta": t["holdout"]["fbeta"], "fbeta_prevalence": t["holdout"]["fbeta_prevalence"],
-                             "trivial_fbeta": t["holdout"]["fbeta"], "attack_detected": 1.0, "normal_alarmed": 1.0})
+            for row in _trivial_rows(head, block, params):
+                writer.writerow(row)
             b = block["baseline"]
             bh = b["holdout"]
             writer.writerow({**head, "method": "baseline", "label": b["label"], "params": b["params"],
-                             "recall": bh["recall"], **dict(zip(("recall_lo", "recall_hi"), _ci_pair(bh.get("ci95"), "recall"))),
-                             "fpr": bh["fpr"], **dict(zip(("fpr_lo", "fpr_hi"), _ci_pair(bh.get("ci95"), "fpr"))),
-                             "precision": bh["precision"], "fbeta": bh["fbeta"],
-                             **dict(zip(("fbeta_lo", "fbeta_hi"), _ci_pair(bh.get("ci95"), "fbeta"))),
-                             "fbeta_prevalence": b["prevalence_rescaled"]["fbeta"], "trivial_fbeta": t["holdout"]["fbeta"],
-                             "roc_auc": bh["roc_auc"]})
+                             "threshold": b["threshold"], **{k: bh[k] for k in METRIC_COLUMNS},
+                             **_ci_cells(bh.get("ci95")), "fbeta_prevalence": b["prevalence_rescaled"]["fbeta"],
+                             "trivial_fbeta": block["trivial"]["holdout"]["fbeta"], "roc_auc": bh["roc_auc"]})
             for e in block["methods"]:
                 row = {**head, "method": e["method"], "label": e["label"], "params": e["params_text"],
                        "infeasible": e["infeasible"], "trivial_fbeta": e["trivial_fbeta"]["holdout"]}
@@ -981,15 +1010,14 @@ def write_comparison_csv(path: str, blocks: list[dict], threshold_free: list[dic
                         row.update({"delta_pauc_vs_nll": d["value"], "delta_pauc_significant": d["significant"],
                                     **dict(zip(("delta_pauc_lo", "delta_pauc_hi"), d["ci95"] or ["", ""]))})
                 if not e["infeasible"]:
-                    h, c, r = e["holdout"], e["calib"], e["record_metrics"]
+                    h, c, r, sel = e["holdout"], e["calib"], e["record_metrics"], e["selected"]
                     rci = r["ci95"] or {}
                     row.update({
+                        "threshold": sel.get("threshold", sel.get("tau")),
+                        "criterion_value": e["criterion_value"]["holdout"],
                         "degenerate": e["degenerate"], "degenerate_holdout": e["degenerate_holdout"],
-                        "recall_calib": c["recall"], "fpr_calib": c["fpr"], "fbeta_calib": c["fbeta"],
-                        "recall": h["recall"], **dict(zip(("recall_lo", "recall_hi"), _ci_pair(h.get("ci95"), "recall"))),
-                        "fpr": h["fpr"], **dict(zip(("fpr_lo", "fpr_hi"), _ci_pair(h.get("ci95"), "fpr"))),
-                        "precision": h["precision"], "fbeta": h["fbeta"],
-                        **dict(zip(("fbeta_lo", "fbeta_hi"), _ci_pair(h.get("ci95"), "fbeta"))),
+                        "recall_calib": c["recall"], "fpr_calib": c["fpr"],
+                        **{k: h[k] for k in METRIC_COLUMNS}, **_ci_cells(h.get("ci95")),
                         "fbeta_prevalence": e["prevalence_rescaled"]["fbeta"],
                         "attack_detected": r["attack_detected"], "normal_alarmed": r["normal_alarmed"],
                         "median_delay_sec": "" if r["median_delay_sec"] is None else r["median_delay_sec"],
@@ -1002,6 +1030,166 @@ def write_comparison_csv(path: str, blocks: list[dict], threshold_free: list[dic
                         row.update({"delta_fbeta_vs_nll": d["value"], "delta_fbeta_significant": d["significant"],
                                     **dict(zip(("delta_fbeta_lo", "delta_fbeta_hi"), d["ci95"] or ["", ""]))})
                 writer.writerow(row)
+
+
+def log_criteria_matrix(blocks: list[dict]) -> None:
+    """Матриця «метод × критерій»: recall / FPR обраної точки на holdout (* — degenerate, "-" — infeasible);
+    окремо без обмеження FPR і для кожного max_fpr."""
+    groups: dict = {}
+    for b in blocks:
+        groups.setdefault(b["max_fpr"], []).append(b)
+    methods = [e["method"] for e in blocks[0]["methods"]]
+    for limit, group in groups.items():
+        title = "no FPR limit" if limit is None else f"FPR(calib) <= {limit:g}"
+        logging.info(f"\nOperating points on holdout, recall / FPR ({title}); * = degenerate, - = infeasible")
+        logging.info(f"{'method':<10}" + "".join(f"{b['objective']:>18}" for b in group))
+        for name in methods:
+            cells = []
+            for b in group:
+                e = next(x for x in b["methods"] if x["method"] == name)
+                if e["infeasible"]:
+                    cells.append("-")
+                else:
+                    cells.append(f"{e['holdout']['recall']:.3f}/{e['holdout']['fpr']:.3f}" + ("*" if e["degenerate"] else ""))
+            logging.info(f"{name:<10}" + "".join(f"{c:>18}" for c in cells))
+
+
+def log_main_criterion_table(block: dict, params: CriterionParams) -> None:
+    """Повна матриця помилок і метрики holdout для основного (першого) критерію."""
+    logging.info(f"\n[{block['tag']}] main criterion, holdout (cost: c_fn={params.cost_fn:g}, c_fp={params.cost_fp:g} "
+                 f"per window); * = degenerate")
+    logging.info(f"{'method':<10}{'params':<20}{'TP':>8}{'FP':>8}{'FN':>8}{'TN':>8}{'prec':>8}{'recall':>8}{'FPR':>8}"
+                 f"{'F1':>8}{'MCC':>8}{'J':>8}{'G-mean':>8}{'cost/w':>8}")
+    entries = [("baseline", block["baseline"]["params"], block["baseline"]["holdout"], False)]
+    entries += [(e["method"], e["params_text"], e["holdout"], e["degenerate"]) for e in block["methods"] if not e["infeasible"]]
+    for name, par, h, deg in entries:
+        logging.info(
+            f"{name + ('*' if deg else ''):<10}{par:<20}{h['tp']:>8}{h['fp']:>8}{h['fn']:>8}{h['tn']:>8}"
+            f"{h['precision']:>8.4f}{h['recall']:>8.4f}{h['fpr']:>8.4f}{h['f1']:>8.4f}{h['mcc']:>8.4f}"
+            f"{h['youden']:>8.4f}{h['gmean']:>8.4f}{h['cost_per_window']:>8.4f}"
+        )
+    for e in block["methods"]:
+        if e["infeasible"]:
+            logging.info(f"{e['method']:<10}infeasible")
+
+
+def plot_operating_points_roc(
+    blocks: list[dict], threshold_free: list[dict], holdout_grids: dict, is_attack: np.ndarray,
+    max_fprs: list[float] | None, service: str, out_path: str,
+) -> None:
+    """Робочі точки, обрані різними критеріями, на ROC-площині holdout (FPR у лог-шкалі).
+
+    Для кожного методу: сірим — усі точки сітки на holdout; лінія — ROC-крива для параметра вікна, обраного
+    за pAUC; маркери — точки, обрані критеріями (заповнений — без обмеження, порожній — з обмеженням FPR).
+    Різні критерії можуть обрати різний параметр вікна, тому маркери не зобов'язані лежати на лінії.
+    """
+    methods = [e for e in blocks[0]["methods"]]
+    tf = {e["method"]: e for e in threshold_free}
+    ncols = 2 if len(methods) > 1 else 1
+    nrows = int(math.ceil(len(methods) / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(6.5 * ncols, 5.2 * nrows), squeeze=False)
+    clipped = False
+    for k, entry in enumerate(methods):
+        ax = axes[k // ncols][k % ncols]
+        name = entry["method"]
+        g = holdout_grids[name]
+        ax.scatter(np.maximum(g["fpr"].ravel(), ROC_MIN_FPR), g["recall"].ravel(), s=6, color="#9ca3af", alpha=0.35,
+                   linewidths=0, zorder=1)
+        if name in tf:
+            fpr, tpr, _ = roc_curve(is_attack, tf[name]["_scores"])
+            ax.plot(np.maximum(fpr, ROC_MIN_FPR), tpr, color=METHOD_COLORS[name], linewidth=1.5, zorder=2)
+        for b in blocks:
+            e = next(x for x in b["methods"] if x["method"] == name)
+            if e["infeasible"]:
+                continue
+            marker, color = CRITERION_STYLE[b["objective"]]
+            x = e["holdout"]["fpr"]
+            clipped |= x < ROC_MIN_FPR
+            ax.scatter([max(x, ROC_MIN_FPR)], [e["holdout"]["recall"]], marker=marker, s=110, zorder=4,
+                       facecolors=color if b["max_fpr"] is None else "none", edgecolors=color, linewidths=1.6)
+        for limit in max_fprs or []:
+            ax.axvline(limit, color="#6b7280", linestyle="--", linewidth=1)
+            ax.text(limit, 0.02, f" α={limit:g}", color="#6b7280", fontsize=8)
+        ax.set_xscale("log")
+        ax.set_xlim(ROC_MIN_FPR * 0.8, 1.1)
+        ax.set_ylim(0, 1.02)
+        ax.set_title(entry["label"])
+        ax.set_xlabel("Частка хибних тривог (FPR)")
+        ax.set_ylabel("Частка виявлених атак (TPR)")
+        ax.grid(True, which="both", alpha=0.25)
+    for k in range(len(methods), nrows * ncols):
+        axes[k // ncols][k % ncols].axis("off")
+
+    beta = blocks[0]["beta"]
+    handles = []
+    for kind in dict.fromkeys(b["objective"] for b in blocks):
+        marker, color = CRITERION_STYLE[kind]
+        handles.append(Line2D([], [], marker=marker, color=color, linestyle="", markersize=9,
+                              label=criterion_label_uk(kind, beta)))
+    handles += [
+        Line2D([], [], marker="o", color="#374151", markerfacecolor="#374151", linestyle="", label="Без обмеження FPR"),
+        Line2D([], [], marker="o", color="#374151", markerfacecolor="none", linestyle="", label="З обмеженням FPR ≤ α"),
+        Line2D([], [], marker="o", color="#9ca3af", linestyle="", markersize=4, label="Усі точки сітки (holdout)"),
+        Line2D([], [], color="#374151", label="ROC-крива (параметр вікна за pAUC)"),
+    ]
+    if clipped:
+        handles.append(Line2D([], [], linestyle="", label="FPR < 10⁻³ показано на лівій межі"))
+    fig.legend(handles=handles, loc="lower center", ncol=4, fontsize=8, frameon=True)
+    fig.suptitle(f"Робочі точки, обрані різними критеріями\n{service}, відкладена частина")
+    fig.tight_layout(rect=(0, 0.08 + 0.02 * (len(handles) // 4), 1, 0.95))
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+
+
+def plot_criteria_comparison(blocks: list[dict], pi_holdout: float, service: str, out_path: str) -> None:
+    """Forest plot: рядки — критерії (і обмеження FPR), у кожному рядку методи з 95% ДІ; панелі F1 і MCC на holdout."""
+    methods = [e["method"] for e in blocks[0]["methods"]]
+    labels = {e["method"]: e["label"] for e in blocks[0]["methods"]}
+    offsets = np.linspace(-0.3, 0.3, len(methods)) if len(methods) > 1 else np.zeros(1)
+    fig, axes = plt.subplots(1, 2, figsize=(13, 0.5 * len(blocks) + 2.6), sharey=True)
+    mcc_min = 0.0
+    for panel, (ax, key, title) in enumerate(zip(axes, ("f1", "mcc"),
+                                                 ("F1 на відкладеній частині", "MCC на відкладеній частині"))):
+        for i, b in enumerate(blocks):
+            for name, dy in zip(methods, offsets):
+                e = next(x for x in b["methods"] if x["method"] == name)
+                y = i + dy
+                if e["infeasible"]:
+                    ax.scatter([0.0], [y], marker="x", color="#9ca3af", s=40, zorder=3)
+                    continue
+                h = e["holdout"]
+                v = h[key]
+                mcc_min = min(mcc_min, v) if key == "mcc" else mcc_min
+                ci = (h.get("ci95") or {}).get(key)
+                if ci is not None:
+                    ax.plot(ci, [y, y], color=METHOD_COLORS[name], linewidth=1.4, zorder=2)
+                ax.scatter([v], [y], marker=METHOD_MARKERS[name], s=48, zorder=3, linewidths=1.3,
+                           facecolors="none" if e["degenerate"] else METHOD_COLORS[name], edgecolors=METHOD_COLORS[name])
+        if key == "f1":
+            ax.axvline(trivial_fbeta(pi_holdout, 1.0), color="#dc2626", linestyle=":", linewidth=1.5)
+            ax.set_xlim(0, 1)
+        else:
+            ax.axvline(0.0, color="#6b7280", linestyle=":", linewidth=1)
+            ax.set_xlim(min(-0.05, mcc_min - 0.05), 1)
+        ax.set_xlabel(title)
+        ax.grid(True, axis="x", alpha=0.3)
+        for i in range(len(blocks) - 1):
+            ax.axhline(i + 0.5, color="#e5e7eb", linewidth=0.8)
+    axes[0].set_yticks(range(len(blocks)))
+    axes[0].set_yticklabels([criterion_label_uk(b["objective"], b["beta"], b["max_fpr"]) for b in blocks], fontsize=9)
+    axes[0].invert_yaxis()
+    handles = [Line2D([], [], marker=METHOD_MARKERS[m], color=METHOD_COLORS[m], linestyle="", label=labels[m])
+               for m in methods]
+    handles += [
+        Line2D([], [], marker="o", color="#374151", markerfacecolor="none", linestyle="", label="Вироджена точка"),
+        Line2D([], [], marker="x", color="#9ca3af", linestyle="", label="Недосяжно (infeasible)"),
+        Line2D([], [], color="#dc2626", linestyle=":", label="F1 тривоги на кожне вікно"),
+    ]
+    fig.legend(handles=handles, loc="lower center", ncol=4, fontsize=8)
+    fig.suptitle(f"Порівняння методів за різних критеріїв вибору робочої точки\n{service}, 95% бутстреп-ДІ")
+    fig.tight_layout(rect=(0, 0.1, 1, 0.94))
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
 
 
 def main() -> None:
@@ -1080,6 +1268,7 @@ def main() -> None:
     if any(m.family == "run" for m in methods) and not m_rows:
         parser.error(f"--m_grid has no values <= seq_len={seq_len}")
     objectives = build_objectives(args.objective or ["fbeta"], args.max_fpr)
+    params = CriterionParams(beta=beta, prevalence=args.prevalence, cost_fn=args.cost_fn, cost_fp=args.cost_fp)
 
     def files_of(recs: np.ndarray) -> dict:
         part_mask = np.isin(test_rec_idx, recs)
@@ -1119,6 +1308,10 @@ def main() -> None:
         "sample": sample,
         "pi_calib": float(test_is_attack[calib_mask].mean()),
         "pi_holdout": float(test_is_attack[holdout_mask].mean()),
+        "class_counts": {part: (int(test_is_attack[mask].sum()), int((~test_is_attack[mask]).sum()))
+                         for part, mask in (("calib", calib_mask), ("holdout", holdout_mask))},
+        "params": params,
+        "main_tag": objectives[0].tag,
         "sanity": sanity,
         "baseline_scores": aggregate(test_nll, base_q),
         "baseline_threshold": float(checkpoint["threshold"]),
@@ -1159,9 +1352,20 @@ def main() -> None:
         nll_results[objective.tag] = next((s["_result"] for s in summaries if s["method"] == REFERENCE_METHOD), None)
         blocks.append(build_block(objective, summaries, baseline, trivial, threshold_free, common, ctx, args))
 
-    write_comparison_csv(os.path.join(out_dir, "comparison.csv"), blocks, threshold_free)
+    write_comparison_csv(os.path.join(out_dir, "comparison.csv"), blocks, threshold_free, args.service, params)
     if any(b["objective"] == "recall_at_fpr" for b in blocks):
         plot_recall_at_fpr(blocks, os.path.join(out_dir, "recall_at_fpr.png"))
+    # хмара всіх точок сітки на holdout для operating_points_roc.png (та сама search, лише на holdout)
+    holdout_grids = {}
+    for m in methods:
+        val_steps, test_steps = ctx["steps"][m.step_key]
+        holdout_grids[m.name] = m.search(val_steps, test_steps[holdout_mask], test_is_attack[holdout_mask],
+                                         rows_of[m.name], p_grid, beta)
+    plot_operating_points_roc(blocks, threshold_free, holdout_grids, test_is_attack[holdout_mask], args.max_fpr,
+                              args.service, os.path.join(out_dir, "operating_points_roc.png"))
+    plot_criteria_comparison(blocks, ctx["pi_holdout"], args.service, os.path.join(out_dir, "criteria_comparison.png"))
+    log_criteria_matrix(blocks)
+    log_main_criterion_table(blocks[0], params)
     log_threshold_free_table(threshold_free)
     logging.info(f"Results: {out_dir}")
 
