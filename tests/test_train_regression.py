@@ -25,7 +25,7 @@ GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 FLOAT_TOL = 1e-5
 OLD_CONFIG_TO_ARG = {
     "SERVICES": "services",
-    "USE_ARG_COUNT_FEATURE": "use_arg_count_feature",
+    "USE_ARG_COUNT_FEATURE": "features",
     "ARG_COUNT_BUCKETS": "arg_count_buckets",
     "FORCE_REBUILD_VOCAB": "force_rebuild_vocab",
     "EMBED_DIM_SYSCALL": "embed_dim_syscall",
@@ -55,7 +55,10 @@ def _argv_from_golden_config(golden_config: dict) -> list[str]:
     argv: list[str] = []
     for key, value in golden_config.items():
         flag = f"--{OLD_CONFIG_TO_ARG[key]}"
-        if isinstance(value, list):
+        if key == "USE_ARG_COUNT_FEATURE":
+            # старий прапорець -> набір ознак
+            argv += [flag, "syscall,process,direction" + (",arg_count" if value else "")]
+        elif isinstance(value, list):
             argv += [flag, *map(str, value)]
         else:
             argv += [flag, str(value)]  # True/False/None are parsed by str2bool and int_or_none
@@ -109,7 +112,7 @@ def test_vocab_and_hparams_exact(golden: dict, trained: dict) -> None:
     ckpt = trained["checkpoint"]
     assert ckpt["vocabs"] == golden["vocabs"]
     assert ckpt["vocab_sizes"] == golden["vocab_sizes"]
-    assert ckpt["hparams"] == golden["hparams"]
+    assert {**ckpt["hparams"], "features": list(ckpt["hparams"]["features"])} == golden["hparams"]
     assert ckpt["epochs_trained"] == golden["epochs_trained"]
 
 

@@ -19,8 +19,8 @@ def main() -> None:
 
 
 def run(args) -> None:
-    tag = get_tag(name=args.name, seed=args.seed)
     args, input_log_messages = check_args(args)
+    tag = get_tag(name=args.name, features=args.features, seed=args.seed)
     set_seeds(args.seed)
     setup_logger(level=args.log_level, tag=tag, directory=args.log_dir, append=args.restart_latest)
     logging.info("===========VERIFYING SETTINGS===========")

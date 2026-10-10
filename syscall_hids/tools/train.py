@@ -13,7 +13,7 @@ from syscall_hids.modules.models import ARCHITECTURE_VERSION, ModelHParams, Sysc
 from syscall_hids.tools import resource_guard
 from syscall_hids.tools.arg_parser_tools import save_config_yaml
 from syscall_hids.tools.evaluation import calibrate_and_evaluate, evaluate_metrics
-from syscall_hids.tools.utils import MetricsLogger
+from syscall_hids.tools.utils import MetricsLogger, features_tag
 from syscall_hids.tools.visualization import plot_training_curves
 
 def load_resume_checkpoint(
@@ -43,10 +43,10 @@ def load_resume_checkpoint(
         return None
 
     checkpoint_hparams = ModelHParams.from_checkpoint(checkpoint)
-    if checkpoint_hparams.use_arg_count_feature != args.use_arg_count_feature:
+    if list(checkpoint_hparams.features) != args.features:
         logging.warning(
-            f"[{service_name}] WARNING: use_arg_count_feature in checkpoint does not match the arguments: "
-            f"cannot resume, starting from scratch."
+            f"[{service_name}] WARNING: features in checkpoint {list(checkpoint_hparams.features)} do not match "
+            f"the arguments {args.features}: cannot resume, starting from scratch."
         )
         return None
 
@@ -119,21 +119,23 @@ def _log_threshold(metrics_logger: MetricsLogger, epoch: int, threshold: float, 
 
 def train_one_service(service_name: str, device: torch.device, args, git_commit: str | None = None) -> None:
     metrics_logger = MetricsLogger(
-        args.results_dir, f"{args.name}_{service_name}_run-{args.seed}_train", append=args.restart_latest
+        args.results_dir, f"{args.name}_{features_tag(args.features)}_{service_name}_run-{args.seed}_train",
+        append=args.restart_latest,
     )
 
     logging.info("===========LOADING INPUT DATA===========")
     logging.info(f"\n=== Service: {service_name} ===")
+    logging.info(f"features: {'+'.join(args.features)}")
 
     vocabs = build_vocab(service_name, args.dataset_root, args.vocab_dir, use_cache=not args.force_rebuild_vocab)
     vocab_sizes = {name: len(vocab) for name, vocab in vocabs.items()}
-    if args.use_arg_count_feature:
+    if "arg_count" in args.features:
         vocab_sizes["arg_count"] = args.arg_count_buckets
     logging.info(f"vocab_sizes={vocab_sizes}")
 
     data_kwargs = dict(
         dataset_root=args.dataset_root,
-        use_arg_count_feature=args.use_arg_count_feature,
+        features=args.features,
         arg_count_buckets=args.arg_count_buckets,
         ram_check_every_n_recordings=args.ram_check_every_n_recordings,
     )

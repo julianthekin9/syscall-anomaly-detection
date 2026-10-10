@@ -5,6 +5,7 @@ import os
 
 import yaml
 
+from syscall_hids.data.vocab import FEATURE_NAMES
 from syscall_hids.tools.arg_parser import WINDOW_AGG_QUANTILE_DEFAULT
 
 
@@ -44,12 +45,31 @@ def check_args(args):
 
     if getattr(args, "window_agg", None) == "max" and args.window_agg_quantile != WINDOW_AGG_QUANTILE_DEFAULT:
         log_messages.append((f"window_agg=max: window_agg_quantile={args.window_agg_quantile} is ignored", logging.WARNING))
-    if getattr(args, "use_arg_count_feature", True) is False:
-        log_messages.append(
-            ("use_arg_count_feature=false: embed_dim_arg_count and arg_count_buckets are not used", logging.WARNING)
-        )
+    if hasattr(args, "features"):
+        args.features = check_features(args.features)
+        if "arg_count" not in args.features:
+            log_messages.append(
+                ("arg_count is not in features: embed_dim_arg_count and arg_count_buckets are not used", logging.WARNING)
+            )
 
     return args, log_messages
+
+
+def check_features(features) -> list[str]:
+    """Перевіряє набір ознак і повертає його в канонічному порядку FEATURE_NAMES.
+
+    features — список або вкладені списки з парсера (--features syscall,process / syscall process).
+    """
+    flat = [name for item in features for name in ([item] if isinstance(item, str) else item)]
+    unknown = [name for name in flat if name not in FEATURE_NAMES]
+    if unknown:
+        raise ValueError(f"features: unknown feature(s) {unknown}, allowed: {FEATURE_NAMES}")
+    duplicates = sorted({name for name in flat if flat.count(name) > 1})
+    if duplicates:
+        raise ValueError(f"features: duplicate feature(s) {duplicates}")
+    if "syscall" not in flat:
+        raise ValueError("features: syscall is required (it is also the prediction target)")
+    return [name for name in FEATURE_NAMES if name in flat]
 
 
 def save_config_yaml(args, path: str) -> None:

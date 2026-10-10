@@ -1,36 +1,37 @@
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
 
 from syscall_hids.data.layout import Split, recording_files, test_recording_files
 from syscall_hids.data.parsing import ParsedLine, read_recording
-from syscall_hids.data.vocab import FEATURE_NAMES, UNK, _SEQ_DTYPE
+from syscall_hids.data.vocab import UNK, _SEQ_DTYPE
 from syscall_hids.tools import resource_guard
 
+# Поле ParsedLine для ознак зі словником
+_LINE_ATTR = {"syscall": "syscall", "process": "process_name", "direction": "direction"}
+
+
 def encode_line(
-    vocabs: dict[str, dict[str, int]], line: ParsedLine, use_arg_count_feature: bool, arg_count_buckets: int
+    vocabs: dict[str, dict[str, int]], line: ParsedLine, features: Sequence[str], arg_count_buckets: int
 ) -> list[int]:
-    """[syscall_idx, process_idx, direction_idx, (arg_count_bucket)]."""
-    row = [
-        vocabs["syscall"].get(line.syscall, vocabs["syscall"][UNK]),
-        vocabs["process"].get(line.process_name, vocabs["process"][UNK]),
-        vocabs["direction"].get(line.direction, vocabs["direction"][UNK]),
-    ]
-    if use_arg_count_feature:
-        row.append(min(line.arg_count, arg_count_buckets - 1))
+    """Індекси вибраних ознак у порядку features (канонічному, syscall першим)."""
+    row = []
+    for name in features:
+        if name == "arg_count":
+            row.append(min(line.arg_count, arg_count_buckets - 1))
+        else:
+            vocab = vocabs[name]
+            row.append(vocab.get(getattr(line, _LINE_ATTR[name]), vocab[UNK]))
     return row
 
 
-def num_features(use_arg_count_feature: bool) -> int:
-    return len(FEATURE_NAMES) + (1 if use_arg_count_feature else 0)
-
-
 def encode_recording(
-    vocabs: dict[str, dict[str, int]], lines: list[ParsedLine], use_arg_count_feature: bool, arg_count_buckets: int
+    vocabs: dict[str, dict[str, int]], lines: list[ParsedLine], features: Sequence[str], arg_count_buckets: int
 ) -> np.ndarray:
-    arr = np.empty((len(lines), num_features(use_arg_count_feature)), dtype=_SEQ_DTYPE)
+    arr = np.empty((len(lines), len(features)), dtype=_SEQ_DTYPE)
     for i, line in enumerate(lines):
-        arr[i, :] = encode_line(vocabs, line, use_arg_count_feature, arg_count_buckets)
+        arr[i, :] = encode_line(vocabs, line, features, arg_count_buckets)
     return arr
 
 
@@ -65,7 +66,7 @@ def build_normal_sequences(
     seq_len: int,
     step: int,
     dataset_root: str,
-    use_arg_count_feature: bool,
+    features: Sequence[str],
     arg_count_buckets: int,
     ram_check_every_n_recordings: int,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -76,7 +77,7 @@ def build_normal_sequences(
         lines = read_recording(str(rec_path))
         if len(lines) < seq_len + 1:
             continue
-        rows = encode_recording(vocabs, lines, use_arg_count_feature, arg_count_buckets)
+        rows = encode_recording(vocabs, lines, features, arg_count_buckets)
         X, y = make_sequences(rows, seq_len, step)
         if len(X):
             X_parts.append(X)
@@ -85,7 +86,7 @@ def build_normal_sequences(
             resource_guard.check_ram(f"{service_name}/{split}: after {i + 1} recordings")
 
     if not X_parts:
-        return np.empty((0, seq_len, num_features(use_arg_count_feature)), dtype=_SEQ_DTYPE), np.empty((0, seq_len, 1), dtype=_SEQ_DTYPE)
+        return np.empty((0, seq_len, len(features)), dtype=_SEQ_DTYPE), np.empty((0, seq_len, 1), dtype=_SEQ_DTYPE)
 
     resource_guard.check_ram(f"{service_name}/{split}: before concatenation ({len(X_parts)} recordings)")
     X_all = np.concatenate(X_parts, axis=0)
@@ -100,7 +101,7 @@ def build_test_sequences(
     seq_len: int,
     step: int,
     dataset_root: str,
-    use_arg_count_feature: bool,
+    features: Sequence[str],
     arg_count_buckets: int,
     ram_check_every_n_recordings: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -116,7 +117,7 @@ def build_test_sequences(
             lines = read_recording(str(rec_path))
             if len(lines) < seq_len + 1:
                 continue
-            rows = encode_recording(vocabs, lines, use_arg_count_feature, arg_count_buckets)
+            rows = encode_recording(vocabs, lines, features, arg_count_buckets)
             X, y = make_sequences(rows, seq_len, step)
             if not len(X):
                 continue
@@ -132,7 +133,7 @@ def build_test_sequences(
 
     if not X_parts:
         return (
-            np.empty((0, seq_len, num_features(use_arg_count_feature)), dtype=_SEQ_DTYPE),
+            np.empty((0, seq_len, len(features)), dtype=_SEQ_DTYPE),
             np.empty((0, seq_len, 1), dtype=_SEQ_DTYPE),
             np.empty((0,), dtype=bool),
         )

@@ -8,6 +8,8 @@ import argparse
 
 import configargparse
 
+from syscall_hids.data.vocab import FEATURE_NAMES
+
 WINDOW_AGG_QUANTILE_DEFAULT = 0.90
 
 
@@ -19,6 +21,11 @@ def str2bool(value) -> bool:
     if value.lower() in ("no", "false", "f", "n", "0"):
         return False
     raise argparse.ArgumentTypeError("Boolean value expected.")
+
+
+def comma_list(value) -> list[str]:
+    """"syscall,process" -> ["syscall", "process"]; разом із nargs="+" приймає і "syscall process"."""
+    return [item for item in str(value).split(",") if item]
 
 
 def int_or_none(value) -> int | None:
@@ -84,7 +91,9 @@ def build_default_arg_parser() -> configargparse.ArgumentParser:
     group.add_argument("--services", type=str, nargs="+", default=["PHP_CWE-434"], help="Scenarios to train on")
 
     group = parser.add_argument_group("Features")
-    _add_bool(group, "--use_arg_count_feature", True, "Syscall argument count feature")
+    group.add_argument("--features", type=comma_list, nargs="+", default=list(FEATURE_NAMES),
+                       help="Model input features (syscall is required): --features syscall,process "
+                            "or YAML list; concatenated in canonical order")
     group.add_argument("--arg_count_buckets", type=int, default=8,
                        help='arg_count buckets: 0,1,...,6, "7+" — clip(arg_count, 0, arg_count_buckets-1)')
     _add_bool(group, "--force_rebuild_vocab", False, "Rebuild the vocab, ignoring the cache")
@@ -93,7 +102,7 @@ def build_default_arg_parser() -> configargparse.ArgumentParser:
     group.add_argument("--embed_dim_syscall", type=int, default=16, help="Syscall embedding dimension")
     group.add_argument("--embed_dim_process", type=int, default=8, help="Process embedding dimension")
     group.add_argument("--embed_dim_direction", type=int, default=2, help="Direction embedding dimension")
-    group.add_argument("--embed_dim_arg_count", type=int, default=4, help="arg_count embedding dimension (if the feature is enabled)")
+    group.add_argument("--embed_dim_arg_count", type=int, default=4, help="arg_count embedding dimension (if arg_count is in features)")
     group.add_argument("--hidden_dim", type=int, default=200, help="LSTM hidden state size")
     group.add_argument("--num_layers", type=int, default=2, help="Number of LSTM layers")
     group.add_argument("--dropout", type=float, default=0.2, help="Dropout between LSTM layers (if num_layers > 1)")

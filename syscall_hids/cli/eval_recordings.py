@@ -102,10 +102,10 @@ def main() -> None:
     if args.eval_test_split:
         vocabs = checkpoint["vocabs"]
         seq_len = checkpoint["seq_len"]
-        use_arg_count_feature, arg_count_buckets = checkpoint_features(checkpoint)
+        features, arg_count_buckets = checkpoint_features(checkpoint)
         X_test, y_test, window_is_attack = build_test_sequences(
             args.service, vocabs, seq_len, seq_len,
-            args.dataset_root, use_arg_count_feature, arg_count_buckets, args.ram_check_every_n_recordings,
+            args.dataset_root, features, arg_count_buckets, args.ram_check_every_n_recordings,
         )
         if len(X_test) == 0:
             print(f"[{args.service}] test split is empty or shorter than SEQ_LEN+1")

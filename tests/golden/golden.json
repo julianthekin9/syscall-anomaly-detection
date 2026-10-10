@@ -222,7 +222,7 @@
    "embed_dim_process": 8,
    "embed_dim_direction": 2,
    "embed_dim_arg_count": 4,
-   "use_arg_count_feature": true,
+   "features": ["syscall", "process", "direction", "arg_count"],
    "hidden_dim": 32,
    "num_layers": 2,
    "dropout": 0.2

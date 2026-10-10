@@ -10,7 +10,7 @@ dataset_root: ./DATASET_LIDDS
 services: [CVE-2017-7529]
 
 # --- Features ---
-use_arg_count_feature: true
+features: [syscall, process, direction, arg_count]  # syscall is required; concatenated in canonical order
 arg_count_buckets: 8  # 0,1,2,...,6, "7+" — clip(arg_count, 0, arg_count_buckets-1)
 force_rebuild_vocab: false
 
@@ -18,7 +18,7 @@ force_rebuild_vocab: false
 embed_dim_syscall: 16
 embed_dim_process: 8
 embed_dim_direction: 2
-embed_dim_arg_count: 4  # used only if use_arg_count_feature=true
+embed_dim_arg_count: 4  # used only if arg_count is in features
 hidden_dim: 200
 num_layers: 2
 dropout: 0.2  # between LSTM layers when num_layers > 1

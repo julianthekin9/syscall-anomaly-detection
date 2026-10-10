@@ -12,7 +12,7 @@ from syscall_hids.tools.arg_parser_tools import check_args
 EXPECTED_DEFAULTS = {
     "dataset_root": "./DATASET_LIDDS",
     "services": ["PHP_CWE-434"],
-    "use_arg_count_feature": True,
+    "features": ["syscall", "process", "direction", "arg_count"],
     "arg_count_buckets": 8,
     "force_rebuild_vocab": False,
     "embed_dim_syscall": 16,
@@ -79,8 +79,28 @@ def test_cli_overrides_yaml(tmp_path: Path) -> None:
 
 
 def test_yaml_false_bool(tmp_path: Path) -> None:
-    args = build_default_arg_parser().parse_args(["--config", _yaml(tmp_path, "use_arg_count_feature: false\n")])
-    assert args.use_arg_count_feature is False
+    args = build_default_arg_parser().parse_args(["--config", _yaml(tmp_path, "force_rebuild_vocab: false\n")])
+    assert args.force_rebuild_vocab is False
+
+
+@pytest.mark.parametrize("argv", [["--features", "process,syscall"], ["--features", "process", "syscall"]])
+def test_features_cli_canonical_order(argv) -> None:
+    args, _ = check_args(build_default_arg_parser().parse_args(argv))
+    assert args.features == ["syscall", "process"]
+
+
+def test_features_cli_overrides_yaml(tmp_path: Path) -> None:
+    cfg = _yaml(tmp_path, "features: [syscall, direction]\n")
+    args, _ = check_args(build_default_arg_parser().parse_args(["--config", cfg]))
+    assert args.features == ["syscall", "direction"]
+    args, _ = check_args(build_default_arg_parser().parse_args(["--config", cfg, "--features", "syscall,arg_count"]))
+    assert args.features == ["syscall", "arg_count"]
+
+
+@pytest.mark.parametrize("features", ["process,direction", "syscall,pid", "syscall,process,syscall"])
+def test_features_invalid(features: str) -> None:
+    with pytest.raises(ValueError):
+        check_args(build_default_arg_parser().parse_args(["--features", features]))
 
 
 def test_unknown_yaml_key_is_error_for_train(tmp_path: Path) -> None:
@@ -111,6 +131,6 @@ def test_check_args_rejects_bad_seq_step() -> None:
 
 def test_check_args_warnings() -> None:
     _, messages = check_args(build_default_arg_parser().parse_args(
-        ["--window_agg", "max", "--window_agg_quantile", "0.5", "--use_arg_count_feature", "false"]
+        ["--window_agg", "max", "--window_agg_quantile", "0.5", "--features", "syscall,process,direction"]
     ))
     assert len(messages) == 2

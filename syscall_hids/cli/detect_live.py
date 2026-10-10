@@ -24,7 +24,7 @@ import numpy as np
 
 
 def encode_tail(
-    vocabs: dict[str, dict[str, int]], raw_events, use_arg_count_feature: bool, arg_count_buckets: int
+    vocabs: dict[str, dict[str, int]], raw_events, features: list[str], arg_count_buckets: int
 ) -> tuple[list[list[int]], list[float]]:
     rows: list[list[int]] = []
     timestamps: list[float] = []
@@ -36,7 +36,7 @@ def encode_tail(
             direction=raw.direction,
             arg_count=raw.arg_count,
         )
-        rows.append(encode_line(vocabs, parsed, use_arg_count_feature, arg_count_buckets))
+        rows.append(encode_line(vocabs, parsed, features, arg_count_buckets))
         timestamps.append(raw.timestamp)
     return rows, timestamps
 
@@ -70,7 +70,7 @@ def main() -> None:
     window_agg = checkpoint["window_agg"]
     window_agg_quantile = checkpoint["window_agg_quantile"]
     threshold = checkpoint["threshold"]
-    use_arg_count_feature, arg_count_buckets = checkpoint_features(checkpoint)
+    features, arg_count_buckets = checkpoint_features(checkpoint)
     needed = seq_len + 1
 
     print(f"[{args.service}] device={device} seq_len={seq_len} window_agg={window_agg} threshold={threshold:.4f}")
@@ -97,7 +97,7 @@ def main() -> None:
             if collector.event_counter != last_scored_event_count:
                 raw_tail = collector.snapshot_tail(needed)
                 if raw_tail is not None:
-                    rows, timestamps = encode_tail(vocabs, raw_tail, use_arg_count_feature, arg_count_buckets)
+                    rows, timestamps = encode_tail(vocabs, raw_tail, features, arg_count_buckets)
                     step_scores = score_window(model, rows, device)
                     score = aggregate_window_scores(
                         step_scores, window_agg=window_agg, window_agg_quantile=window_agg_quantile

@@ -8,7 +8,10 @@ from syscall_hids.data.parsing import read_recording
 
 PAD = "<PAD>"
 UNK = "<UNK>"
-FEATURE_NAMES = ["syscall", "process", "direction"]  # + "arg_count" if use_arg_count_feature
+# Канонічний порядок вхідних ознак: у ньому кодуються колонки та конкатенуються ембединги.
+# syscall завжди перший (колонка 0 — ціль передбачення)
+FEATURE_NAMES = ["syscall", "process", "direction", "arg_count"]
+VOCAB_FEATURE_NAMES = ["syscall", "process", "direction"]  # ознаки зі словником (arg_count — бакети)
 
 
 def vocab_path(service_name: str, vocab_dir: str) -> Path:
@@ -55,7 +58,7 @@ def build_vocab(
             _check_vocab_fits_dtype(cached)
             return cached
 
-    raw_values: dict[str, set] = {name: set() for name in FEATURE_NAMES}
+    raw_values: dict[str, set] = {name: set() for name in VOCAB_FEATURE_NAMES}
     for rec_path in recording_files(service_name, "train", dataset_root):
         for line in read_recording(str(rec_path)):
             raw_values["syscall"].add(line.syscall)
@@ -63,7 +66,7 @@ def build_vocab(
             raw_values["direction"].add(line.direction)
 
     vocabs: dict[str, dict[str, int]] = {}
-    for name in FEATURE_NAMES:
+    for name in VOCAB_FEATURE_NAMES:
         sorted_values = sorted(raw_values[name])
         vocab = {PAD: 0, UNK: 1}
         vocab.update({value: i + 2 for i, value in enumerate(sorted_values)})

@@ -3,8 +3,6 @@ from dataclasses import asdict, dataclass
 import torch
 from torch import nn
 
-from syscall_hids.data.vocab import FEATURE_NAMES
-
 ARCHITECTURE_VERSION = 3
 
 
@@ -14,7 +12,7 @@ class ModelHParams:
     embed_dim_process: int
     embed_dim_direction: int
     embed_dim_arg_count: int
-    use_arg_count_feature: bool
+    features: tuple[str, ...]  # вибрані вхідні ознаки в канонічному порядку (data.vocab.FEATURE_NAMES)
     hidden_dim: int
     num_layers: int
     dropout: float
@@ -26,7 +24,7 @@ class ModelHParams:
             embed_dim_process=args.embed_dim_process,
             embed_dim_direction=args.embed_dim_direction,
             embed_dim_arg_count=args.embed_dim_arg_count,
-            use_arg_count_feature=args.use_arg_count_feature,
+            features=tuple(args.features),
             hidden_dim=args.hidden_dim,
             num_layers=args.num_layers,
             dropout=args.dropout,
@@ -52,9 +50,7 @@ class SyscallLSTM(nn.Module):
 
         self.hparams = hparams
 
-        self.feature_order = list(FEATURE_NAMES)  # ["syscall", "process", "direction"]
-        if self.hparams.use_arg_count_feature:
-            self.feature_order.append("arg_count")
+        self.feature_order = list(self.hparams.features)
 
         embed_dims = {
             "syscall": self.hparams.embed_dim_syscall,

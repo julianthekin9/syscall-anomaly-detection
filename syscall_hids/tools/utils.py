@@ -15,8 +15,13 @@ import torch
 _HANDLER_MARK = "_syscall_hids_handler"
 
 
-def get_tag(name: str, seed: int) -> str:
-    return f"{name}_run-{seed}"
+def features_tag(features) -> str:
+    """Мітка набору ознак для імен файлів: feat-syscall+process."""
+    return "feat-" + "+".join(features)
+
+
+def get_tag(name: str, features, seed: int) -> str:
+    return f"{name}_{features_tag(features)}_run-{seed}"
 
 
 def setup_logger(
