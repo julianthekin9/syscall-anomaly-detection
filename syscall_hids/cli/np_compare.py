@@ -207,10 +207,10 @@ def write_results_csv(path: str, rows: list[dict]) -> None:
 
 
 def summary_table(rows: list[dict], alphas: list[float], auc_alpha: float) -> tuple[list[str], list[list]]:
-    """Рядки — методи, стовпці — recall, precision і FPR записів при кожному α, плюс ROC-AUC (при auc_alpha)."""
+    """Рядки — методи, стовпці — recall, precision, F1 і FPR записів при кожному α, плюс ROC-AUC (при auc_alpha)."""
     header = ["method"]
     for a in alphas:
-        header += [f"recall@{_pct(a)}", f"precision@{_pct(a)}", f"record_fpr@{_pct(a)}"]
+        header += [f"recall@{_pct(a)}", f"precision@{_pct(a)}", f"f1@{_pct(a)}", f"record_fpr@{_pct(a)}"]
     header.append(f"roc_auc@{_pct(auc_alpha)}")
     by_key = {(r["method"], r["alpha"]): r for r in rows}
     table = []
@@ -218,7 +218,7 @@ def summary_table(rows: list[dict], alphas: list[float], auc_alpha: float) -> tu
         line: list = [method]
         for a in alphas:
             r = by_key[(method, a)]
-            line += [r["recall"], r["precision"], r["record_fpr"]]
+            line += [r["recall"], r["precision"], r["f1"], r["record_fpr"]]
         line.append(by_key[(method, auc_alpha)]["roc_auc"])
         table.append(line)
     return header, table

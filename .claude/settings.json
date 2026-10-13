@@ -23,7 +23,7 @@
       "Read(./normal_training.sc)",
       "Read(./ApachePHP_normal.sc)",
       "Read(./LID-DS_DATASET/**)",
-      "Read(./DATASET*/**)"
+      "Read(./DATASET*/**/*.sc)"
     ]
   }
 }

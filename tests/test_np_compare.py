@@ -86,8 +86,9 @@ def test_np_end_to_end(tmp_path: Path, monkeypatch) -> None:
             assert 0.0 <= float(r[key]) <= 1.0
     with open(out_dir / "np_table.csv", encoding="utf-8") as fh:
         table = list(csv.reader(fh))
-    assert table[0] == ["method", "recall@0.1%", "precision@0.1%", "record_fpr@0.1%", "recall@1%", "precision@1%",
-                        "record_fpr@1%", "recall@5%", "precision@5%", "record_fpr@5%", "roc_auc@1%"]
+    assert table[0] == ["method", "recall@0.1%", "precision@0.1%", "f1@0.1%", "record_fpr@0.1%", "recall@1%",
+                        "precision@1%", "f1@1%", "record_fpr@1%", "recall@5%", "precision@5%", "f1@5%",
+                        "record_fpr@5%", "roc_auc@1%"]
     assert [t[0] for t in table[1:]] == list(METHOD_NAMES)
     meta = json.loads((out_dir / "np_meta.json").read_text(encoding="utf-8"))
     assert meta["alphas"] == [0.001, 0.01, 0.05]
