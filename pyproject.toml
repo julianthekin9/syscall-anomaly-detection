@@ -29,6 +29,7 @@ hids-eval = "syscall_hids.cli.eval_recordings:main"
 hids-detect = "syscall_hids.cli.detect_live:main"
 hids-plot-train = "syscall_hids.cli.plot_train:main"
 hids-calibrate = "syscall_hids.cli.calibrate:main"
+hids-np = "syscall_hids.cli.np_compare:main"
 
 [tool.setuptools.dynamic]
 version = { attr = "syscall_hids.__version__" }
